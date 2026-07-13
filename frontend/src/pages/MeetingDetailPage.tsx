@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { getErrorMessage, meetingsApi } from '@/lib/api'
+import { partitionParticipants } from '@/lib/meeting-participants'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -36,8 +37,7 @@ export function MeetingDetailPage() {
   if (isLoading) return <div className="h-32 animate-pulse rounded-lg bg-[var(--color-muted)]" />
   if (!meeting) return <div>Meeting not found</div>
 
-  const invitedParticipants = meeting.participants.filter((p) => (p.invitationStatus ?? 'INVITED') === 'INVITED')
-  const busyInvites = meeting.participants.filter((p) => p.invitationStatus === 'INVITED_BUSY')
+  const { invitedParticipants, busyInvites } = partitionParticipants(meeting)
 
   return (
     <div>
@@ -113,7 +113,7 @@ function ParticipantRow({ participant, busy = false }: {
     <li className="flex items-center gap-2 text-sm">
       <div className={cn(
         'flex h-8 w-8 items-center justify-center rounded-full text-xs font-medium',
-        busy ? 'bg-[var(--color-blue)] text-white' : 'bg-[var(--color-muted)]',
+        busy ? 'bg-[var(--color-primary)]/10 text-[var(--color-primary)]' : 'bg-[var(--color-muted)]',
       )}>
         {(participant.displayName || participant.email).charAt(0).toUpperCase()}
       </div>
@@ -121,7 +121,7 @@ function ParticipantRow({ participant, busy = false }: {
         <div className="flex items-center gap-2">
           <span className="font-medium">{participant.displayName || participant.email}</span>
           {busy && (
-            <span className="rounded-full bg-[var(--color-blue)]/15 px-2 py-0.5 text-xs font-medium text-[var(--color-blue)]">
+            <span className="rounded-full bg-[var(--color-primary)]/10 px-2 py-0.5 text-xs font-medium text-[var(--color-primary)]">
               Invited but busy
             </span>
           )}

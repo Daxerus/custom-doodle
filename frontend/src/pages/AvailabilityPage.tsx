@@ -105,7 +105,7 @@ export function AvailabilityPage() {
       />
 
       {focusWindow && (
-        <div className="mb-4 rounded-md border px-4 py-3 text-sm text-[var(--color-blue)]">
+        <div className="mb-4 rounded-md border border-[var(--color-primary)]/25 bg-[var(--color-primary)]/5 px-4 py-3 text-sm text-[var(--color-foreground)]">
           Checking availability for meeting time{' '}
           <span className="font-medium">
             {format(new Date(focusWindow.start), 'MMM d HH:mm')} – {format(new Date(focusWindow.end), 'HH:mm')}
@@ -239,14 +239,14 @@ function UserAvailabilitySummary({
       <p className={cn(
         'text-sm',
         summary.tone === 'free' && 'text-[var(--color-free)]',
-        summary.tone === 'warn' && 'text-[var(--color-blue)]',
+        summary.tone === 'warn' && 'text-[var(--color-primary)]',
         summary.tone === 'busy' && 'text-[var(--color-busy)]',
       )}>
         {summary.text}
       </p>
 
       {focusWindow && availableAtFocus === false && (
-        <p className="text-sm text-[var(--color-blue)]">
+        <p className="text-sm text-[var(--color-primary)]">
           Not available at the meeting time ({format(new Date(focusWindow.start), 'MMM d HH:mm')} – {format(new Date(focusWindow.end), 'HH:mm')}).
         </p>
       )}
