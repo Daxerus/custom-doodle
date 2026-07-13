@@ -48,7 +48,6 @@ npm run dev
 - [Architecture](docs/architecture.md)
 - [API Guide](docs/api-guide.md) — curl, Swagger, and Postman
 - [Postman Collection](docs/postman/Mini-Doodle-API.postman_collection.json) — import to test the API without the frontend
-- [UI Design Brief](docs/views/design-brief.md)
 
 ## Development Workflow
 
