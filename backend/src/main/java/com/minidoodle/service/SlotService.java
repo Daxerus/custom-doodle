@@ -1,24 +1,33 @@
 package com.minidoodle.service;
 
+import com.minidoodle.domain.Meeting;
 import com.minidoodle.domain.MeetingStatus;
 import com.minidoodle.domain.SlotStatus;
 import com.minidoodle.domain.TimeSlot;
 import com.minidoodle.dto.CreateSlotRequest;
+import com.minidoodle.dto.PageResponse;
 import com.minidoodle.dto.SlotResponse;
 import com.minidoodle.dto.UpdateSlotRequest;
 import com.minidoodle.exception.ApiException;
 import com.minidoodle.repository.MeetingRepository;
 import com.minidoodle.repository.TimeSlotRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class SlotService {
+
+    private static final int MAX_PAGE_SIZE = 100;
 
     private final TimeSlotRepository timeSlotRepository;
     private final MeetingRepository meetingRepository;
@@ -33,13 +42,24 @@ public class SlotService {
         this.calendarService = calendarService;
     }
 
-    public List<SlotResponse> listSlots(UUID userId, Instant from, Instant to) {
+    public PageResponse<SlotResponse> listSlots(UUID userId, Instant from, Instant to, int page, int size) {
+        int safeSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
         UUID calendarId = calendarService.getCalendarIdForUser(userId);
-        return timeSlotRepository
-                .findByCalendarIdAndStartAtLessThanAndEndAtGreaterThanOrderByStartAt(calendarId, to, from)
-                .stream()
-                .map(slot -> SlotResponse.from(slot, getMeetingId(slot.getId())))
+        Page<TimeSlot> slotPage = timeSlotRepository
+                .findByCalendarIdAndStartAtLessThanAndEndAtGreaterThanOrderByStartAt(
+                        calendarId, to, from, PageRequest.of(Math.max(page, 0), safeSize));
+
+        List<UUID> slotIds = slotPage.getContent().stream().map(TimeSlot::getId).toList();
+        Map<UUID, UUID> meetingIdsBySlot = slotIds.isEmpty()
+                ? Map.of()
+                : meetingRepository.findScheduledByTimeSlotIds(slotIds).stream()
+                        .collect(Collectors.toMap(Meeting::getTimeSlotId, Meeting::getId, (a, b) -> a));
+
+        List<SlotResponse> content = slotPage.getContent().stream()
+                .map(slot -> SlotResponse.from(slot, meetingIdsBySlot.get(slot.getId())))
                 .toList();
+
+        return PageResponse.from(slotPage, content);
     }
 
     public SlotResponse getSlot(UUID userId, UUID slotId) {
@@ -126,7 +146,7 @@ public class SlotService {
 
     private UUID getMeetingId(UUID slotId) {
         return meetingRepository.findByTimeSlotIdAndStatus(slotId, MeetingStatus.SCHEDULED)
-                .map(meeting -> meeting.getId())
+                .map(Meeting::getId)
                 .orElse(null);
     }
 }

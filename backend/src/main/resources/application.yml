@@ -26,6 +26,7 @@ minidoodle:
     refresh-token-expiration-ms: 604800000
   cors:
     allowed-origins: ${CORS_ORIGINS:http://localhost:5173}
+  cookie-secure: ${COOKIE_SECURE:false}
 
 management:
   endpoints:
