@@ -2,20 +2,22 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { format, isPast } from 'date-fns'
-import { meetingsApi } from '@/lib/api'
+import { getErrorMessage, meetingsApi } from '@/lib/api'
 import { partitionParticipants } from '@/lib/meeting-participants'
 import { Button } from '@/components/ui/button'
-import { EmptyState, PageHeader, StatusBadge } from '@/components/shared'
+import { ApiErrorAlert, EmptyState, PageHeader, StatusBadge } from '@/components/shared'
 
 type Filter = 'UPCOMING' | 'PAST' | 'ALL'
 
 export function MeetingsPage() {
   const [filter, setFilter] = useState<Filter>('UPCOMING')
 
-  const { data: meetings = [], isLoading } = useQuery({
+  const { data: meetingsPage, isLoading, isError, error } = useQuery({
     queryKey: ['meetings'],
-    queryFn: meetingsApi.list,
+    queryFn: () => meetingsApi.list(0, 100),
   })
+
+  const meetings = meetingsPage?.content ?? []
 
   const filtered = meetings.filter((m) => {
     if (m.status === 'CANCELLED') return filter === 'ALL'
@@ -29,6 +31,12 @@ export function MeetingsPage() {
     <div>
       <PageHeader title="Meetings" description="Meetings you organize or participate in" />
 
+      {isError && (
+        <div className="mb-4">
+          <ApiErrorAlert message={getErrorMessage(error)} />
+        </div>
+      )}
+
       <div className="mb-4 flex gap-2">
         {(['UPCOMING', 'PAST', 'ALL'] as Filter[]).map((f) => (
           <Button key={f} variant={filter === f ? 'default' : 'outline'} size="sm" onClick={() => setFilter(f)}>
@@ -39,7 +47,7 @@ export function MeetingsPage() {
 
       {isLoading ? (
         <div className="h-32 animate-pulse rounded-lg bg-[var(--color-muted)]" />
-      ) : filtered.length === 0 ? (
+      ) : isError ? null : filtered.length === 0 ? (
         <EmptyState
           title="No meetings scheduled"
           description="Book a meeting from a free time slot on your schedule."
