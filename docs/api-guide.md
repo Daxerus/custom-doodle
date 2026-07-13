@@ -1,66 +1,89 @@
 # Mini Doodle — API Consumption Guide
 
+This guide covers how to exercise the API **without the frontend**. You can use [Swagger UI](http://localhost:8080/swagger-ui.html), [curl](#quick-start-curl), or the [Postman collection](postman/Mini-Doodle-API.postman_collection.json).
+
 ## Quick Start
 
 ```bash
-# 1. Start services
-docker compose up -d
+# 1. Start services (rebuild backend image after code changes)
+docker compose up -d --build
 
-# 2. Register a user (session cookie is set automatically)
+# 2. Open interactive docs
+# http://localhost:8080/swagger-ui.html
+```
+
+| Tool | URL / file |
+|------|------------|
+| Swagger UI | http://localhost:8080/swagger-ui.html |
+| Postman collection | [docs/postman/Mini-Doodle-API.postman_collection.json](postman/Mini-Doodle-API.postman_collection.json) |
+| Health check | http://localhost:8080/actuator/health |
+
+## Authentication
+
+Authentication uses **JWT access tokens** plus an **httpOnly refresh cookie**:
+
+1. Call `POST /auth/register` or `POST /auth/login`.
+2. Save the `accessToken` from the JSON response.
+3. Send `Authorization: Bearer <accessToken>` on protected endpoints.
+4. When the access token expires, call `POST /auth/refresh` with the refresh cookie to get a new access token.
+
+In Swagger UI, click **Authorize** and paste the access token (without the `Bearer` prefix if the UI adds it automatically).
+
+## Quick Start (curl)
+
+```bash
+# Register a user
 curl -X POST http://localhost:8080/api/v1/auth/register \
   -H "Content-Type: application/json" \
   -c cookies.txt \
   -d '{"displayName":"Alice","email":"alice@example.com","password":"securePass123"}'
 
-# 3. Login (or reuse cookies.txt from register)
+# Login (save accessToken from response)
 curl -X POST http://localhost:8080/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -c cookies.txt \
   -d '{"email":"alice@example.com","password":"securePass123"}'
+
+# Set TOKEN from the accessToken field in the login/register response
+TOKEN="paste-access-token-here"
 ```
 
-## Authentication
-
-Authentication uses **server-side HTTP sessions**. After login or register, the backend sets a `JSESSIONID` cookie. Send it on every subsequent request:
+Authenticated requests:
 
 ```bash
-curl -b cookies.txt ...
+curl http://localhost:8080/api/v1/auth/me -H "Authorization: Bearer $TOKEN"
 ```
 
-For mutating requests (`POST`, `PUT`, `PATCH`, `DELETE`), also send the CSRF token from the `XSRF-TOKEN` cookie:
+Refresh when expired:
 
 ```bash
-CSRF=$(grep XSRF-TOKEN cookies.txt | awk '{print $7}')
-curl -X POST http://localhost:8080/api/v1/slots \
-  -b cookies.txt \
-  -H "X-XSRF-TOKEN: $CSRF" \
-  ...
+curl -X POST http://localhost:8080/api/v1/auth/refresh -b cookies.txt -c cookies.txt
 ```
 
-The React frontend handles cookies and CSRF automatically via the Vite dev proxy (`withCredentials: true`).
-
-Logout invalidates the session server-side:
+Logout clears the refresh cookie:
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/auth/logout -b cookies.txt
+curl -X POST http://localhost:8080/api/v1/auth/logout \
+  -H "Authorization: Bearer $TOKEN" \
+  -b cookies.txt
 ```
 
 ## Create a Time Slot
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/slots \
-  -b cookies.txt \
-  -H "X-XSRF-TOKEN: $CSRF" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"startAt":"2026-07-15T10:00:00Z","durationMinutes":60,"status":"FREE"}'
 ```
 
 ## Book a Meeting
 
+Book on a **FREE** slot owned by the authenticated user:
+
 ```bash
 curl -X POST http://localhost:8080/api/v1/slots/{slotId}/meeting \
-  -b cookies.txt \
-  -H "X-XSRF-TOKEN: $CSRF" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"title":"Team sync","description":"Weekly standup","participantEmails":["bob@example.com"]}'
 ```
@@ -69,12 +92,26 @@ curl -X POST http://localhost:8080/api/v1/slots/{slotId}/meeting \
 
 ```bash
 curl "http://localhost:8080/api/v1/availability?userIds={userId1},{userId2}&from=2026-07-15T00:00:00Z&to=2026-07-22T00:00:00Z" \
-  -b cookies.txt
+  -H "Authorization: Bearer $TOKEN"
 ```
+
+## Suggested Evaluation Flow
+
+1. **Register** two users (organizer + participant).
+2. **Login** as the organizer and save the `accessToken`.
+3. **Create** a FREE time slot.
+4. **Book** a meeting on that slot, inviting the participant by email.
+5. **List meetings** and **query availability** for both user IDs.
+6. **Cancel** the meeting (DELETE) and verify the slot can be rebooked.
+7. **Logout**.
 
 ## Interactive Documentation
 
-Open http://localhost:8080/swagger-ui.html for the full OpenAPI specification. Use your browser session or curl with cookies for authenticated endpoints.
+Open http://localhost:8080/swagger-ui.html for the full OpenAPI specification.
+
+1. Run `POST /auth/register` or `POST /auth/login`.
+2. Copy `accessToken` from the response.
+3. Click **Authorize** and paste the token.
 
 ## Error Handling
 
@@ -83,7 +120,7 @@ Errors follow RFC 9457 Problem Details. Common status codes:
 | Status | Meaning |
 |--------|---------|
 | 400 | Validation error |
-| 401 | Not authenticated (no valid session) |
-| 403 | Not authorized for resource |
+| 401 | Missing or expired access token |
+| 403 | Not authorized for the resource |
 | 404 | Resource not found |
-| 409 | Conflict (e.g. slot overlap) |
+| 409 | Conflict (e.g. slot overlap or slot already booked) |

@@ -9,7 +9,7 @@ npm install
 npm run dev
 ```
 
-API requests are proxied to `http://localhost:8080` via Vite. Session cookies and CSRF tokens are sent automatically.
+API requests are proxied to `http://localhost:8080` via Vite. JWT access tokens are sent in the `Authorization` header; refresh cookies are included automatically.
 
 ## Scripts
 

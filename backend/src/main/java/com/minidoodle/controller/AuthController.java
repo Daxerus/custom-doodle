@@ -1,16 +1,17 @@
 package com.minidoodle.controller;
 
-import com.minidoodle.domain.User;
 import com.minidoodle.dto.AuthResponse;
 import com.minidoodle.dto.ChangePasswordRequest;
 import com.minidoodle.dto.LoginRequest;
 import com.minidoodle.dto.RegisterRequest;
 import com.minidoodle.dto.UpdateProfileRequest;
 import com.minidoodle.dto.UserResponse;
+import com.minidoodle.exception.ApiException;
+import com.minidoodle.security.JwtService;
 import com.minidoodle.security.SecurityUtils;
-import com.minidoodle.security.SessionAuthService;
 import com.minidoodle.service.AuthService;
-import jakarta.servlet.http.HttpServletRequest;
+import io.jsonwebtoken.Claims;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -22,37 +23,61 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Arrays;
+import java.util.UUID;
+
 @RestController
 @RequestMapping("/api/v1/auth")
 public class AuthController {
 
-    private final AuthService authService;
-    private final SessionAuthService sessionAuthService;
+    private static final String REFRESH_COOKIE = "refreshToken";
 
-    public AuthController(AuthService authService, SessionAuthService sessionAuthService) {
+    private final AuthService authService;
+    private final JwtService jwtService;
+
+    public AuthController(AuthService authService, JwtService jwtService) {
         this.authService = authService;
-        this.sessionAuthService = sessionAuthService;
+        this.jwtService = jwtService;
     }
 
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(
             @Valid @RequestBody RegisterRequest request,
-            HttpServletRequest httpRequest,
-            HttpServletResponse httpResponse) {
-        User user = authService.register(request);
-        sessionAuthService.establishSessionForUser(user, httpRequest, httpResponse);
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(new AuthResponse(UserResponse.from(user)));
+            HttpServletResponse response) {
+        AuthResponse auth = authService.register(request);
+        setRefreshCookie(response, authService.generateRefreshToken(
+                auth.user().id(), auth.user().email()));
+        return ResponseEntity.status(HttpStatus.CREATED).body(auth);
     }
 
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(
             @Valid @RequestBody LoginRequest request,
-            HttpServletRequest httpRequest,
-            HttpServletResponse httpResponse) {
-        sessionAuthService.authenticate(request.email(), request.password(), httpRequest, httpResponse);
-        UserResponse user = authService.getProfileByEmail(request.email());
-        return ResponseEntity.ok(new AuthResponse(user));
+            HttpServletResponse response) {
+        AuthResponse auth = authService.login(request);
+        setRefreshCookie(response, authService.generateRefreshToken(
+                auth.user().id(), auth.user().email()));
+        return ResponseEntity.ok(auth);
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<AuthResponse> refresh(
+            jakarta.servlet.http.HttpServletRequest request,
+            HttpServletResponse response) {
+        String refreshToken = extractRefreshToken(request);
+        if (refreshToken == null) {
+            throw new ApiException("invalid-token", "Refresh token missing", HttpStatus.UNAUTHORIZED);
+        }
+
+        Claims claims = jwtService.parseToken(refreshToken);
+        if (!jwtService.isRefreshToken(claims)) {
+            throw new ApiException("invalid-token", "Invalid refresh token", HttpStatus.UNAUTHORIZED);
+        }
+
+        UUID userId = jwtService.getUserId(claims);
+        AuthResponse auth = authService.refresh(userId);
+        setRefreshCookie(response, authService.generateRefreshToken(userId, auth.user().email()));
+        return ResponseEntity.ok(auth);
     }
 
     @GetMapping("/me")
@@ -72,8 +97,33 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout(HttpServletRequest request, HttpServletResponse response) {
-        sessionAuthService.logout(request, response);
+    public ResponseEntity<Void> logout(HttpServletResponse response) {
+        Cookie cookie = new Cookie(REFRESH_COOKIE, "");
+        cookie.setHttpOnly(true);
+        cookie.setSecure(false);
+        cookie.setPath("/api/v1/auth");
+        cookie.setMaxAge(0);
+        response.addCookie(cookie);
         return ResponseEntity.noContent().build();
+    }
+
+    private void setRefreshCookie(HttpServletResponse response, String refreshToken) {
+        Cookie cookie = new Cookie(REFRESH_COOKIE, refreshToken);
+        cookie.setHttpOnly(true);
+        cookie.setSecure(false);
+        cookie.setPath("/api/v1/auth");
+        cookie.setMaxAge((int) (jwtService.getRefreshTokenExpirationMs() / 1000));
+        response.addCookie(cookie);
+    }
+
+    private String extractRefreshToken(jakarta.servlet.http.HttpServletRequest request) {
+        if (request.getCookies() == null) {
+            return null;
+        }
+        return Arrays.stream(request.getCookies())
+                .filter(c -> REFRESH_COOKIE.equals(c.getName()))
+                .map(Cookie::getValue)
+                .findFirst()
+                .orElse(null);
     }
 }

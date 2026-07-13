@@ -97,7 +97,7 @@ Mini Doodle is a high-performance meeting scheduling platform. Users manage pers
 | ID | Requirement | Acceptance Criteria |
 |----|-------------|---------------------|
 | R9.1 | Registration | Email, display name, password; auto-creates domain Calendar |
-| R9.2 | Login | Server-side HTTP session with httpOnly cookie |
+| R9.2 | Login | JWT access token + httpOnly refresh cookie |
 | R9.3 | Protected routes | All slot/meeting endpoints require authentication |
 | R9.4 | Availability privacy | MVP: any authenticated user can query any user's availability |
 
@@ -145,7 +145,7 @@ Mini Doodle is a high-performance meeting scheduling platform. Users manage pers
 | Backend | Java 21, Spring Boot 3.4.x, Spring Security, Spring Data JPA |
 | Database | PostgreSQL 16, Flyway |
 | Frontend | React 18, TypeScript, Vite, shadcn/ui, Tailwind CSS |
-| Auth | HTTP sessions (JSESSIONID cookie) |
+| Auth | JWT (access token + refresh cookie) |
 | Infra | Docker, docker-compose |
 | API docs | springdoc-openapi |
 | Metrics | Spring Actuator, Micrometer |
