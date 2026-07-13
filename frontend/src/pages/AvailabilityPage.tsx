@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import { addDays, format } from 'date-fns'
 import { availabilityApi, usersApi } from '@/lib/api'
-import type { User } from '@/types'
+import type { BusyInterval, User } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -10,12 +11,44 @@ import { ApiErrorAlert, EmptyState, PageHeader } from '@/components/shared'
 import { cn } from '@/lib/utils'
 
 export function AvailabilityPage() {
+  const [searchParams] = useSearchParams()
   const [search, setSearch] = useState('')
   const [selectedUsers, setSelectedUsers] = useState<User[]>([])
   const [from, setFrom] = useState(format(new Date(), "yyyy-MM-dd'T'00:00"))
   const [to, setTo] = useState(format(addDays(new Date(), 7), "yyyy-MM-dd'T'23:59"))
   const [error, setError] = useState('')
   const [queryParams, setQueryParams] = useState<{ userIds: string[]; from: string; to: string } | null>(null)
+  const [focusWindow, setFocusWindow] = useState<{ start: string; end: string } | null>(null)
+
+  useEffect(() => {
+    const userIdsParam = searchParams.get('userIds')
+    const fromParam = searchParams.get('from')
+    const toParam = searchParams.get('to')
+    const auto = searchParams.get('auto')
+    const focusStart = searchParams.get('focusStart')
+    const focusEnd = searchParams.get('focusEnd')
+
+    if (focusStart && focusEnd) {
+      setFocusWindow({ start: focusStart, end: focusEnd })
+    }
+
+    if (!userIdsParam || !fromParam || !toParam) {
+      return
+    }
+
+    const userIds = userIdsParam.split(',').filter(Boolean)
+    if (userIds.length === 0) {
+      return
+    }
+
+    setFrom(format(new Date(fromParam), "yyyy-MM-dd'T'HH:mm"))
+    setTo(format(new Date(toParam), "yyyy-MM-dd'T'HH:mm"))
+    setSelectedUsers(userIds.map((id) => ({ id, email: '', displayName: 'Loading…' })))
+
+    if (auto === '1' || auto === 'true') {
+      setQueryParams({ userIds, from: fromParam, to: toParam })
+    }
+  }, [searchParams])
 
   const { data: searchResults = [] } = useQuery({
     queryKey: ['users', search],
@@ -28,6 +61,17 @@ export function AvailabilityPage() {
     queryFn: () => availabilityApi.query(queryParams!.userIds, queryParams!.from, queryParams!.to),
     enabled: !!queryParams,
   })
+
+  useEffect(() => {
+    if (!availability?.users.length) {
+      return
+    }
+    setSelectedUsers(availability.users.map((user) => ({
+      id: user.userId,
+      email: user.email,
+      displayName: user.displayName,
+    })))
+  }, [availability?.users])
 
   function addUser(user: User) {
     if (!selectedUsers.find((u) => u.id === user.id)) {
@@ -55,7 +99,20 @@ export function AvailabilityPage() {
 
   return (
     <div>
-      <PageHeader title="Availability" description="View aggregated free/busy across users" />
+      <PageHeader
+        title="Availability"
+        description="Users need a Free time slot to be invited to a meeting. No slots or only Busy slots means unavailable."
+      />
+
+      {focusWindow && (
+        <div className="mb-4 rounded-md border px-4 py-3 text-sm text-[var(--color-blue)]">
+          Checking availability for meeting time{' '}
+          <span className="font-medium">
+            {format(new Date(focusWindow.start), 'MMM d HH:mm')} – {format(new Date(focusWindow.end), 'HH:mm')}
+          </span>
+          . A participant is available only if they have a <span className="font-medium">Free</span> slot overlapping that window.
+        </div>
+      )}
 
       <div className="mb-6 rounded-lg border border-[var(--color-border)] p-6">
         <div className="space-y-4">
@@ -122,29 +179,97 @@ export function AvailabilityPage() {
           {availability.users.map((user) => (
             <div key={user.userId} className="rounded-lg border border-[var(--color-border)] p-4">
               <div className="mb-3 font-medium">{user.displayName} <span className="text-sm text-[var(--color-muted-foreground)]">{user.email}</span></div>
-              {user.busyIntervals.length === 0 ? (
-                <p className="text-sm text-[var(--color-free)]">Fully available in this range</p>
-              ) : (
-                <div className="space-y-1">
-                  {user.busyIntervals.map((interval, i) => (
-                    <div
-                      key={i}
-                      className={cn(
-                        'rounded px-3 py-2 text-sm',
-                        interval.meetingId ? 'bg-[var(--color-meeting)]/15 text-[var(--color-meeting)]' :
-                        interval.status === 'BUSY' ? 'bg-[var(--color-busy)]/15' : 'bg-[var(--color-free)]/15',
-                      )}
-                    >
-                      {format(new Date(interval.startAt), 'MMM d HH:mm')} – {format(new Date(interval.endAt), 'HH:mm')}
-                      {interval.meetingTitle && ` · ${interval.meetingTitle}`}
-                    </div>
-                  ))}
-                </div>
-              )}
+              <UserAvailabilitySummary
+                intervals={user.busyIntervals}
+                hasFreeSlotInRange={user.hasFreeSlotInRange ?? user.busyIntervals.some((i) => i.status === 'FREE' && !i.meetingId)}
+                focusWindow={focusWindow}
+              />
             </div>
           ))}
         </div>
       ) : null}
+    </div>
+  )
+}
+
+function overlapsWindow(interval: BusyInterval, start: string, end: string) {
+  return interval.startAt < end && interval.endAt > start
+}
+
+function isBookableFree(interval: BusyInterval) {
+  return interval.status === 'FREE' && !interval.meetingId
+}
+
+function UserAvailabilitySummary({
+  intervals,
+  hasFreeSlotInRange,
+  focusWindow,
+}: {
+  intervals: BusyInterval[]
+  hasFreeSlotInRange: boolean
+  focusWindow: { start: string; end: string } | null
+}) {
+  const focusIntervals = focusWindow
+    ? intervals.filter((interval) => overlapsWindow(interval, focusWindow.start, focusWindow.end))
+    : []
+  const availableAtFocus = focusWindow
+    ? focusIntervals.some(isBookableFree)
+    : null
+
+  let summary: { tone: 'free' | 'warn' | 'busy'; text: string }
+  if (intervals.length === 0) {
+    summary = {
+      tone: 'warn',
+      text: 'No time slots in this range — has not marked any availability.',
+    }
+  } else if (!hasFreeSlotInRange) {
+    summary = {
+      tone: 'busy',
+      text: 'No free time slots in this range.',
+    }
+  } else {
+    summary = {
+      tone: 'free',
+      text: 'Has free time slots in this range.',
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <p className={cn(
+        'text-sm',
+        summary.tone === 'free' && 'text-[var(--color-free)]',
+        summary.tone === 'warn' && 'text-[var(--color-blue)]',
+        summary.tone === 'busy' && 'text-[var(--color-busy)]',
+      )}>
+        {summary.text}
+      </p>
+
+      {focusWindow && availableAtFocus === false && (
+        <p className="text-sm text-[var(--color-blue)]">
+          Not available at the meeting time ({format(new Date(focusWindow.start), 'MMM d HH:mm')} – {format(new Date(focusWindow.end), 'HH:mm')}).
+        </p>
+      )}
+
+      {intervals.length > 0 && (
+        <div className="space-y-1">
+          {intervals.map((interval, i) => (
+            <div
+              key={i}
+              className={cn(
+                'rounded px-3 py-2 text-sm',
+                interval.meetingId ? 'bg-[var(--color-meeting)]/15 text-[var(--color-meeting)]' :
+                interval.status === 'BUSY' ? 'bg-[var(--color-busy)]/15' : 'bg-[var(--color-free)]/15',
+              )}
+            >
+              {format(new Date(interval.startAt), 'MMM d HH:mm')} – {format(new Date(interval.endAt), 'HH:mm')}
+              {interval.meetingTitle && ` · ${interval.meetingTitle}`}
+              {interval.status === 'FREE' && !interval.meetingId && ' · Free'}
+              {interval.status === 'BUSY' && !interval.meetingId && ' · Busy'}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
