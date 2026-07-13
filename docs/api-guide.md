@@ -60,13 +60,15 @@ Refresh when expired:
 curl -X POST http://localhost:8080/api/v1/auth/refresh -b cookies.txt -c cookies.txt
 ```
 
-Logout clears the refresh cookie:
+Logout invalidates all issued access and refresh tokens for the user and clears the refresh cookie:
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/auth/logout \
   -H "Authorization: Bearer $TOKEN" \
   -b cookies.txt
 ```
+
+After logout, `GET /auth/me` with the same access token returns `401`.
 
 ## Create a Time Slot
 
@@ -86,6 +88,15 @@ curl -X POST http://localhost:8080/api/v1/slots/{slotId}/meeting \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"title":"Team sync","description":"Weekly standup","participantEmails":["bob@example.com"]}'
+```
+
+## Cancel a Meeting
+
+Returns the cancelled meeting with `status: CANCELLED` and frees the associated slot:
+
+```bash
+curl -X DELETE http://localhost:8080/api/v1/meetings/{meetingId} \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 ## Query Availability
