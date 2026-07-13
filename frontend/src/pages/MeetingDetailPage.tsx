@@ -5,6 +5,8 @@ import { format } from 'date-fns'
 import { getErrorMessage, meetingsApi } from '@/lib/api'
 import { editMeetingSchema, parseParticipantEmails } from '@/lib/schemas'
 import { partitionParticipants } from '@/lib/meeting-participants'
+import { ParticipantEmailPicker, participantToInvite } from '@/components/ParticipantEmailPicker'
+import type { ParticipantInvite } from '@/components/ParticipantEmailPicker'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -145,17 +147,23 @@ function ParticipantRow({ participant, busy = false }: {
 }
 
 function EditMeetingDialog({ meeting, onClose, onSuccess, onError }: {
-  meeting: { id: string; title: string; description: string | null; participants: { email: string }[] }
+  meeting: { id: string; title: string; description: string | null; participants: { userId: string | null; email: string; displayName: string | null }[] }
   onClose: () => void; onSuccess: () => void; onError: (m: string) => void
 }) {
   const [title, setTitle] = useState(meeting.title)
   const [description, setDescription] = useState(meeting.description || '')
-  const [emails, setEmails] = useState(meeting.participants.map((p) => p.email).join(', '))
+  const [participants, setParticipants] = useState<ParticipantInvite[]>(
+    meeting.participants.map(participantToInvite),
+  )
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const parsed = editMeetingSchema.safeParse({ title, description, participantEmails: emails })
+    const parsed = editMeetingSchema.safeParse({
+      title,
+      description,
+      participantEmails: participants.map((p) => p.email).join(', '),
+    })
     if (!parsed.success) {
       onError(parsed.error.issues[0]?.message ?? 'Invalid form data')
       return
@@ -184,7 +192,7 @@ function EditMeetingDialog({ meeting, onClose, onSuccess, onError }: {
           <div className="space-y-2"><Label>Description</Label>
             <textarea className="flex min-h-20 w-full rounded-md border border-[var(--color-input)] px-3 py-2 text-sm" value={description} onChange={(e) => setDescription(e.target.value)} />
           </div>
-          <div className="space-y-2"><Label>Participants</Label><Input value={emails} onChange={(e) => setEmails(e.target.value)} /></div>
+          <ParticipantEmailPicker value={participants} onChange={setParticipants} />
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
             <Button type="submit" disabled={loading}>Save</Button>

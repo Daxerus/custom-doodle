@@ -3,12 +3,14 @@ import { buildAvailabilityUrl } from '@/lib/availability-url'
 import { getErrorMessage, meetingsApi } from '@/lib/api'
 import { bookMeetingSchema, parseParticipantEmails } from '@/lib/schemas'
 import type { Meeting, Slot } from '@/types'
+import { ParticipantEmailPicker } from '@/components/ParticipantEmailPicker'
+import type { ParticipantInvite } from '@/components/ParticipantEmailPicker'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 export function BookMeetingDialog({ open, slot, onClose, onSuccess, onError }: {
   open: boolean
@@ -20,13 +22,25 @@ export function BookMeetingDialog({ open, slot, onClose, onSuccess, onError }: {
   const queryClient = useQueryClient()
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [emails, setEmails] = useState('')
+  const [participants, setParticipants] = useState<ParticipantInvite[]>([])
   const [loading, setLoading] = useState(false)
   const [createdMeeting, setCreatedMeeting] = useState<Meeting | null>(null)
 
+  useEffect(() => {
+    if (open && !createdMeeting) {
+      setTitle('')
+      setDescription('')
+      setParticipants([])
+    }
+  }, [open, createdMeeting])
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const parsed = bookMeetingSchema.safeParse({ title, description, participantEmails: emails })
+    const parsed = bookMeetingSchema.safeParse({
+      title,
+      description,
+      participantEmails: participants.map((p) => p.email).join(', '),
+    })
     if (!parsed.success) {
       onError(parsed.error.issues[0]?.message ?? 'Invalid form data')
       return
@@ -140,10 +154,7 @@ export function BookMeetingDialog({ open, slot, onClose, onSuccess, onError }: {
               onChange={(e) => setDescription(e.target.value)}
             />
           </div>
-          <div className="space-y-2">
-            <Label>Participants (comma-separated emails)</Label>
-            <Input value={emails} onChange={(e) => setEmails(e.target.value)} placeholder="bob@example.com, carol@example.com" />
-          </div>
+          <ParticipantEmailPicker value={participants} onChange={setParticipants} />
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
             <Button type="submit" disabled={loading}>{loading ? 'Scheduling...' : 'Schedule meeting'}</Button>
