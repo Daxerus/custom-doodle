@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { format, isPast } from 'date-fns'
 import { meetingsApi } from '@/lib/api'
+import { partitionParticipants } from '@/lib/meeting-participants'
 import { Button } from '@/components/ui/button'
 import { EmptyState, PageHeader, StatusBadge } from '@/components/shared'
 
@@ -47,8 +48,9 @@ export function MeetingsPage() {
       ) : (
         <div className="space-y-2">
           {filtered.map((meeting) => {
-            const invitedCount = meeting.participants.filter((p) => (p.invitationStatus ?? 'INVITED') === 'INVITED').length
-            const busyCount = meeting.participants.filter((p) => p.invitationStatus === 'INVITED_BUSY').length
+            const { invitedParticipants, busyInvites } = partitionParticipants(meeting)
+            const invitedCount = invitedParticipants.length
+            const busyCount = busyInvites.length
             return (
             <Link
               key={meeting.id}

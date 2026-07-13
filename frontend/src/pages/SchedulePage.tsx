@@ -390,12 +390,13 @@ function BookMeetingDialog({ open, slot, onClose, onSuccess, onError }: {
           <DialogHeader>
             <DialogTitle>Some participants may be unavailable</DialogTitle>
           </DialogHeader>
-          <div className="rounded-md border px-4 py-3 text-sm mb-2">
-            <p className="font-medium text-[var(--color-blue)]">
+          <div className="rounded-md border border-[var(--color-primary)]/25 bg-[var(--color-primary)]/5 px-4 py-3 text-sm">
+            <p className="font-medium text-[var(--color-foreground)]">
               The meeting was created, but these users are not available at the selected time and were saved as{' '}
-              <span className="font-semibold">Invited but busy</span> (they will not see this meeting in their calendar):
+              <span className="font-semibold text-[var(--color-primary)]">Invited but busy</span>{' '}
+              (they will not see this meeting in their calendar):
             </p>
-            <ul className="mt-2 list-inside list-disc space-y-1 text-[var(--color-blue)]">
+            <ul className="mt-2 list-inside list-disc space-y-1 text-[var(--color-foreground)]">
               {unavailable.map((participant) => (
                 <li key={participant.userId}>
                   {participant.displayName} ({participant.email})
@@ -407,7 +408,7 @@ function BookMeetingDialog({ open, slot, onClose, onSuccess, onError }: {
                 href={availabilityUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-medium text-[var(--color-blue)] underline underline-offset-2 hover:opacity-80"
+                className="font-medium text-[var(--color-primary)] underline underline-offset-2 hover:opacity-80"
               >
                 Check their availability here
               </a>

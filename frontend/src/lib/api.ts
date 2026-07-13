@@ -1,4 +1,5 @@
 import axios, { type AxiosError } from 'axios'
+import { normalizeMeeting } from '@/lib/meeting-participants'
 import type {
   AuthResponse,
   AvailabilityResponse,
@@ -94,12 +95,12 @@ export const slotsApi = {
 }
 
 export const meetingsApi = {
-  list: () => api.get<Meeting[]>('/meetings').then((r) => r.data),
-  get: (id: string) => api.get<Meeting>(`/meetings/${id}`).then((r) => r.data),
+  list: () => api.get<Meeting[]>('/meetings').then((r) => r.data.map(normalizeMeeting)),
+  get: (id: string) => api.get<Meeting>(`/meetings/${id}`).then((r) => normalizeMeeting(r.data)),
   book: (slotId: string, data: { title: string; description?: string; participantEmails?: string[] }) =>
-    api.post<Meeting>(`/slots/${slotId}/meeting`, data).then((r) => r.data),
+    api.post<Meeting>(`/slots/${slotId}/meeting`, data).then((r) => normalizeMeeting(r.data)),
   update: (id: string, data: Record<string, unknown>) =>
-    api.patch<Meeting>(`/meetings/${id}`, data).then((r) => r.data),
+    api.patch<Meeting>(`/meetings/${id}`, data).then((r) => normalizeMeeting(r.data)),
   cancel: (id: string) => api.delete(`/meetings/${id}`),
 }
 
