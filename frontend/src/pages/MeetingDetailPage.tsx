@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { getErrorMessage, meetingsApi } from '@/lib/api'
+import { editMeetingSchema, parseParticipantEmails } from '@/lib/schemas'
 import { partitionParticipants } from '@/lib/meeting-participants'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,7 +19,7 @@ export function MeetingDetailPage() {
   const [showEdit, setShowEdit] = useState(false)
   const [error, setError] = useState('')
 
-  const { data: meeting, isLoading } = useQuery({
+  const { data: meeting, isLoading, isError, error: queryError } = useQuery({
     queryKey: ['meetings', id],
     queryFn: () => meetingsApi.get(id!),
     enabled: !!id,
@@ -35,6 +36,15 @@ export function MeetingDetailPage() {
   })
 
   if (isLoading) return <div className="h-32 animate-pulse rounded-lg bg-[var(--color-muted)]" />
+
+  if (isError) {
+    return (
+      <div>
+        <ApiErrorAlert message={getErrorMessage(queryError)} />
+      </div>
+    )
+  }
+
   if (!meeting) return <div>Meeting not found</div>
 
   const { invitedParticipants, busyInvites } = partitionParticipants(meeting)
@@ -78,7 +88,7 @@ export function MeetingDetailPage() {
             <>
               <h3 className="mt-6 font-semibold">Invited but busy ({busyInvites.length})</h3>
               <p className="mt-1 text-xs text-[var(--color-muted-foreground)]">
-                These users were not added to the meeting calendar because they have no free slot at this time.
+                These users were invited but have no free slot at this time. They can still view the meeting.
               </p>
               <ul className="mt-4 space-y-2">
                 {busyInvites.map((p) => (
@@ -145,12 +155,17 @@ function EditMeetingDialog({ meeting, onClose, onSuccess, onError }: {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    const parsed = editMeetingSchema.safeParse({ title, description, participantEmails: emails })
+    if (!parsed.success) {
+      onError(parsed.error.issues[0]?.message ?? 'Invalid form data')
+      return
+    }
     setLoading(true)
     try {
       await meetingsApi.update(meeting.id, {
-        title,
-        description,
-        participantEmails: emails.split(',').map((e) => e.trim()).filter(Boolean),
+        title: parsed.data.title,
+        description: parsed.data.description,
+        participantEmails: parseParticipantEmails(parsed.data.participantEmails),
       })
       onSuccess()
     } catch (err) {

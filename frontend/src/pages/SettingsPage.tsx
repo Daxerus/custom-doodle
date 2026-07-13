@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useMutation } from '@tanstack/react-query'
 import { useAuth } from '@/contexts/AuthContext'
 import { authApi, getErrorMessage } from '@/lib/api'
+import { changePasswordSchema, profileSchema } from '@/lib/schemas'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -11,48 +13,63 @@ import { ApiErrorAlert, PageHeader } from '@/components/shared'
 export function SettingsPage() {
   const { user, logout, refreshUser } = useAuth()
   const navigate = useNavigate()
-  const [displayName, setDisplayName] = useState(user?.displayName || '')
+  const [displayName, setDisplayName] = useState('')
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [message, setMessage] = useState('')
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [profileError, setProfileError] = useState('')
+  const [passwordError, setPasswordError] = useState('')
 
-  async function handleProfileSave(e: React.FormEvent) {
-    e.preventDefault()
-    setError('')
-    setLoading(true)
-    try {
-      await authApi.updateProfile(displayName)
+  useEffect(() => {
+    if (user?.displayName) {
+      setDisplayName(user.displayName)
+    }
+  }, [user?.displayName])
+
+  const profileMutation = useMutation({
+    mutationFn: (name: string) => authApi.updateProfile(name),
+    onSuccess: async () => {
       await refreshUser()
       setMessage('Profile updated')
-    } catch (err) {
-      setError(getErrorMessage(err))
-    } finally {
-      setLoading(false)
-    }
-  }
+      setProfileError('')
+    },
+    onError: (err) => setProfileError(getErrorMessage(err)),
+  })
 
-  async function handlePasswordChange(e: React.FormEvent) {
-    e.preventDefault()
-    setError('')
-    if (newPassword !== confirmPassword) {
-      setError('Passwords do not match')
-      return
-    }
-    setLoading(true)
-    try {
-      await authApi.changePassword(currentPassword, newPassword)
+  const passwordMutation = useMutation({
+    mutationFn: ({ current, next }: { current: string; next: string }) =>
+      authApi.changePassword(current, next),
+    onSuccess: () => {
       setMessage('Password changed')
+      setPasswordError('')
       setCurrentPassword('')
       setNewPassword('')
       setConfirmPassword('')
-    } catch (err) {
-      setError(getErrorMessage(err))
-    } finally {
-      setLoading(false)
+    },
+    onError: (err) => setPasswordError(getErrorMessage(err)),
+  })
+
+  function handleProfileSave(e: React.FormEvent) {
+    e.preventDefault()
+    setMessage('')
+    const parsed = profileSchema.safeParse({ displayName })
+    if (!parsed.success) {
+      setProfileError(parsed.error.issues[0]?.message ?? 'Invalid form data')
+      return
     }
+    profileMutation.mutate(parsed.data.displayName)
+  }
+
+  function handlePasswordChange(e: React.FormEvent) {
+    e.preventDefault()
+    setMessage('')
+    const parsed = changePasswordSchema.safeParse({ currentPassword, newPassword, confirmPassword })
+    if (!parsed.success) {
+      setPasswordError(parsed.error.issues[0]?.message ?? 'Invalid form data')
+      return
+    }
+    passwordMutation.mutate({ current: parsed.data.currentPassword, next: parsed.data.newPassword })
   }
 
   async function handleLogout() {
@@ -65,7 +82,6 @@ export function SettingsPage() {
       <PageHeader title="Settings" description="Manage your account" />
 
       {message && <div className="mb-4 rounded-md bg-[var(--color-free)]/10 px-4 py-3 text-sm text-[var(--color-free)]">{message}</div>}
-      {error && <div className="mb-4"><ApiErrorAlert message={error} /></div>}
 
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
@@ -74,7 +90,8 @@ export function SettingsPage() {
             <CardDescription>Update your display name</CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={(e) => void handleProfileSave(e)} className="space-y-4">
+            <form onSubmit={handleProfileSave} className="space-y-4">
+              {profileError && <ApiErrorAlert message={profileError} />}
               <div className="space-y-2">
                 <Label>Display name</Label>
                 <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} required />
@@ -83,7 +100,9 @@ export function SettingsPage() {
                 <Label>Email</Label>
                 <Input value={user?.email || ''} disabled className="opacity-60" />
               </div>
-              <Button type="submit" disabled={loading}>Save profile</Button>
+              <Button type="submit" disabled={profileMutation.isPending}>
+                {profileMutation.isPending ? 'Saving...' : 'Save profile'}
+              </Button>
             </form>
           </CardContent>
         </Card>
@@ -94,7 +113,8 @@ export function SettingsPage() {
             <CardDescription>Change your password</CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={(e) => void handlePasswordChange(e)} className="space-y-4">
+            <form onSubmit={handlePasswordChange} className="space-y-4">
+              {passwordError && <ApiErrorAlert message={passwordError} />}
               <div className="space-y-2">
                 <Label>Current password</Label>
                 <Input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required />
@@ -107,7 +127,9 @@ export function SettingsPage() {
                 <Label>Confirm new password</Label>
                 <Input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
               </div>
-              <Button type="submit" disabled={loading}>Change password</Button>
+              <Button type="submit" disabled={passwordMutation.isPending}>
+                {passwordMutation.isPending ? 'Changing...' : 'Change password'}
+              </Button>
             </form>
           </CardContent>
         </Card>
