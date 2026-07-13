@@ -8,6 +8,7 @@ export interface User {
 }
 
 export interface AuthResponse {
+  accessToken: string
   user: User
 }
 
@@ -20,11 +21,20 @@ export interface Slot {
   meetingId: string | null
 }
 
+export type ParticipantInvitationStatus = 'INVITED' | 'INVITED_BUSY'
+
 export interface Participant {
   id: string
   userId: string | null
   email: string
   displayName: string | null
+  invitationStatus: ParticipantInvitationStatus
+}
+
+export interface UnavailableParticipant {
+  userId: string
+  email: string
+  displayName: string
 }
 
 export interface Meeting {
@@ -39,6 +49,7 @@ export interface Meeting {
   endAt: string
   participants: Participant[]
   role: 'ORGANIZER' | 'PARTICIPANT'
+  unavailableParticipants: UnavailableParticipant[]
 }
 
 export interface BusyInterval {
@@ -54,6 +65,7 @@ export interface UserAvailability {
   displayName: string
   email: string
   busyIntervals: BusyInterval[]
+  hasFreeSlotInRange: boolean
 }
 
 export interface AvailabilityResponse {

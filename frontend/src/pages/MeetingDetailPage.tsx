@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { ApiErrorAlert, PageHeader, StatusBadge } from '@/components/shared'
+import { cn } from '@/lib/utils'
 
 export function MeetingDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -35,6 +36,9 @@ export function MeetingDetailPage() {
   if (isLoading) return <div className="h-32 animate-pulse rounded-lg bg-[var(--color-muted)]" />
   if (!meeting) return <div>Meeting not found</div>
 
+  const invitedParticipants = meeting.participants.filter((p) => (p.invitationStatus ?? 'INVITED') === 'INVITED')
+  const busyInvites = meeting.participants.filter((p) => p.invitationStatus === 'INVITED_BUSY')
+
   return (
     <div>
       <PageHeader
@@ -60,23 +64,29 @@ export function MeetingDetailPage() {
           <p className="mt-4 text-sm">Organizer: <span className="font-medium">{meeting.organizerName}</span></p>
         </div>
         <div className="rounded-lg border border-[var(--color-border)] p-6">
-          <h3 className="font-semibold">Participants ({meeting.participants.length})</h3>
+          <h3 className="font-semibold">Participants ({invitedParticipants.length})</h3>
           <ul className="mt-4 space-y-2">
-            {meeting.participants.map((p) => (
-              <li key={p.id} className="flex items-center gap-2 text-sm">
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-muted)] text-xs font-medium">
-                  {(p.displayName || p.email).charAt(0).toUpperCase()}
-                </div>
-                <div>
-                  <div className="font-medium">{p.displayName || p.email}</div>
-                  {p.displayName && <div className="text-xs text-[var(--color-muted-foreground)]">{p.email}</div>}
-                </div>
-              </li>
+            {invitedParticipants.map((p) => (
+              <ParticipantRow key={p.id} participant={p} />
             ))}
-            {meeting.participants.length === 0 && (
-              <li className="text-sm text-[var(--color-muted-foreground)]">No participants</li>
+            {invitedParticipants.length === 0 && (
+              <li className="text-sm text-[var(--color-muted-foreground)]">No confirmed participants</li>
             )}
           </ul>
+
+          {busyInvites.length > 0 && (
+            <>
+              <h3 className="mt-6 font-semibold">Invited but busy ({busyInvites.length})</h3>
+              <p className="mt-1 text-xs text-[var(--color-muted-foreground)]">
+                These users were not added to the meeting calendar because they have no free slot at this time.
+              </p>
+              <ul className="mt-4 space-y-2">
+                {busyInvites.map((p) => (
+                  <ParticipantRow key={p.id} participant={p} busy />
+                ))}
+              </ul>
+            </>
+          )}
         </div>
       </div>
 
@@ -92,6 +102,35 @@ export function MeetingDetailPage() {
         />
       )}
     </div>
+  )
+}
+
+function ParticipantRow({ participant, busy = false }: {
+  participant: { displayName: string | null; email: string }
+  busy?: boolean
+}) {
+  return (
+    <li className="flex items-center gap-2 text-sm">
+      <div className={cn(
+        'flex h-8 w-8 items-center justify-center rounded-full text-xs font-medium',
+        busy ? 'bg-[var(--color-blue)] text-white' : 'bg-[var(--color-muted)]',
+      )}>
+        {(participant.displayName || participant.email).charAt(0).toUpperCase()}
+      </div>
+      <div className="flex-1">
+        <div className="flex items-center gap-2">
+          <span className="font-medium">{participant.displayName || participant.email}</span>
+          {busy && (
+            <span className="rounded-full bg-[var(--color-blue)]/15 px-2 py-0.5 text-xs font-medium text-[var(--color-blue)]">
+              Invited but busy
+            </span>
+          )}
+        </div>
+        {participant.displayName && (
+          <div className="text-xs text-[var(--color-muted-foreground)]">{participant.email}</div>
+        )}
+      </div>
+    </li>
   )
 }
 

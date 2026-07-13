@@ -46,7 +46,10 @@ export function MeetingsPage() {
         />
       ) : (
         <div className="space-y-2">
-          {filtered.map((meeting) => (
+          {filtered.map((meeting) => {
+            const invitedCount = meeting.participants.filter((p) => (p.invitationStatus ?? 'INVITED') === 'INVITED').length
+            const busyCount = meeting.participants.filter((p) => p.invitationStatus === 'INVITED_BUSY').length
+            return (
             <Link
               key={meeting.id}
               to={`/meetings/${meeting.id}`}
@@ -58,12 +61,15 @@ export function MeetingsPage() {
                   {format(new Date(meeting.startAt), 'EEE, MMM d · HH:mm')} – {format(new Date(meeting.endAt), 'HH:mm')}
                 </div>
                 <div className="mt-1 text-xs text-[var(--color-muted-foreground)]">
-                  {meeting.participants.length} participant{meeting.participants.length !== 1 ? 's' : ''} · {meeting.role}
+                  {invitedCount} participant{invitedCount !== 1 ? 's' : ''}
+                  {busyCount > 0 && ` · ${busyCount} invited but busy`}
+                  {' · '}{meeting.role}
                 </div>
               </div>
               <StatusBadge status={meeting.status === 'SCHEDULED' ? 'BUSY' : 'FREE'} meetingId={meeting.status === 'SCHEDULED' ? meeting.id : null} />
             </Link>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

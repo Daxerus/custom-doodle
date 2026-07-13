@@ -3,8 +3,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { addDays, addWeeks, endOfWeek, format, startOfWeek, subWeeks } from 'date-fns'
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { buildAvailabilityUrl } from '@/lib/availability-url'
 import { getErrorMessage, meetingsApi, slotsApi } from '@/lib/api'
-import type { Slot } from '@/types'
+import type { Meeting, Slot } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -50,9 +51,16 @@ export function SchedulePage() {
 
   const toggleStatusMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) => slotsApi.updateStatus(id, status),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['slots'] }),
+    onSuccess: (updated) => {
+      setSelectedSlot(updated)
+      void queryClient.invalidateQueries({ queryKey: ['slots'] })
+    },
     onError: (err) => setError(getErrorMessage(err)),
   })
+
+  const drawerSlot = selectedSlot
+    ? slots.find((s) => s.id === selectedSlot.id) ?? selectedSlot
+    : null
 
   return (
     <div>
@@ -118,17 +126,18 @@ export function SchedulePage() {
         <WeekGrid weekStart={weekStart} slots={filteredSlots} onSelect={setSelectedSlot} />
       )}
 
-      {selectedSlot && (
+      {drawerSlot && (
         <SlotDetailDrawer
-          slot={selectedSlot}
+          slot={drawerSlot}
+          isTogglingStatus={toggleStatusMutation.isPending}
           onClose={() => setSelectedSlot(null)}
           onEdit={() => { setShowCreate(true); setSelectedSlot(null) }}
           onBook={() => setShowBook(true)}
-          onDelete={() => deleteMutation.mutate(selectedSlot.id)}
+          onDelete={() => deleteMutation.mutate(drawerSlot.id)}
           onToggleStatus={() =>
             toggleStatusMutation.mutate({
-              id: selectedSlot.id,
-              status: selectedSlot.status === 'FREE' ? 'BUSY' : 'FREE',
+              id: drawerSlot.id,
+              status: drawerSlot.status === 'FREE' ? 'BUSY' : 'FREE',
             })
           }
         />
@@ -197,11 +206,22 @@ function WeekGrid({ weekStart, slots, onSelect }: { weekStart: Date; slots: Slot
   )
 }
 
-function SlotDetailDrawer({ slot, onClose, onEdit, onBook, onDelete, onToggleStatus }: {
-  slot: Slot; onClose: () => void; onEdit: () => void; onBook: () => void; onDelete: () => void; onToggleStatus: () => void
+function SlotDetailDrawer({ slot, isTogglingStatus, onClose, onEdit, onBook, onDelete, onToggleStatus }: {
+  slot: Slot
+  isTogglingStatus?: boolean
+  onClose: () => void
+  onEdit: () => void
+  onBook: () => void
+  onDelete: () => void
+  onToggleStatus: () => void
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/30" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex justify-end bg-black/30"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose()
+      }}
+    >
       <div className="h-full w-full max-w-md bg-[var(--color-background)] p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">Time slot details</h2>
@@ -219,16 +239,26 @@ function SlotDetailDrawer({ slot, onClose, onEdit, onBook, onDelete, onToggleSta
           </Link>
         )}
         <div className="mt-6 flex flex-col gap-2">
-          <Button variant="outline" onClick={onEdit}>Edit</Button>
+          <Button type="button" variant="outline" onClick={onEdit}>Edit</Button>
           {!slot.meetingId && (
             <>
-              <Button variant="outline" onClick={onToggleStatus}>
-                Mark as {slot.status === 'FREE' ? 'Busy' : 'Free'}
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isTogglingStatus}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onToggleStatus()
+                }}
+              >
+                {isTogglingStatus ? 'Updating...' : `Mark as ${slot.status === 'FREE' ? 'Busy' : 'Free'}`}
               </Button>
-              {slot.status === 'FREE' && <Button onClick={onBook}>Book meeting</Button>}
+              {slot.status === 'FREE' && (
+                <Button type="button" onClick={onBook}>Book meeting</Button>
+              )}
             </>
           )}
-          <Button variant="destructive" onClick={onDelete}>Delete</Button>
+          <Button type="button" variant="destructive" onClick={onDelete}>Delete</Button>
         </div>
       </div>
     </div>
@@ -301,26 +331,100 @@ function SlotFormDialog({ open, slot, onClose, onSuccess, onError }: {
 function BookMeetingDialog({ open, slot, onClose, onSuccess, onError }: {
   open: boolean; slot: Slot; onClose: () => void; onSuccess: () => void; onError: (m: string) => void
 }) {
+  const queryClient = useQueryClient()
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [emails, setEmails] = useState('')
   const [loading, setLoading] = useState(false)
+  const [createdMeeting, setCreatedMeeting] = useState<Meeting | null>(null)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     try {
-      await meetingsApi.book(slot.id, {
+      const meeting = await meetingsApi.book(slot.id, {
         title,
         description: description || undefined,
         participantEmails: emails.split(',').map((e) => e.trim()).filter(Boolean),
       })
-      onSuccess()
+      if ((meeting.unavailableParticipants ?? []).length > 0) {
+        setCreatedMeeting(meeting)
+      } else {
+        onSuccess()
+      }
     } catch (err) {
       onError(getErrorMessage(err))
     } finally {
       setLoading(false)
     }
+  }
+
+  async function handleCancelMeeting() {
+    if (!createdMeeting) return
+    setLoading(true)
+    try {
+      await meetingsApi.cancel(createdMeeting.id)
+      void queryClient.invalidateQueries({ queryKey: ['slots'] })
+      void queryClient.invalidateQueries({ queryKey: ['meetings'] })
+      setCreatedMeeting(null)
+      onClose()
+    } catch (err) {
+      onError(getErrorMessage(err))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function handleKeepMeeting() {
+    setCreatedMeeting(null)
+    onSuccess()
+  }
+
+  if (createdMeeting) {
+    const unavailable = createdMeeting.unavailableParticipants
+    const availabilityUrl = buildAvailabilityUrl(unavailable, createdMeeting.startAt, createdMeeting.endAt)
+
+    return (
+      <Dialog open={open} onOpenChange={(v) => !v && handleKeepMeeting()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Some participants may be unavailable</DialogTitle>
+          </DialogHeader>
+          <div className="rounded-md border px-4 py-3 text-sm mb-2">
+            <p className="font-medium text-[var(--color-blue)]">
+              The meeting was created, but these users are not available at the selected time and were saved as{' '}
+              <span className="font-semibold">Invited but busy</span> (they will not see this meeting in their calendar):
+            </p>
+            <ul className="mt-2 list-inside list-disc space-y-1 text-[var(--color-blue)]">
+              {unavailable.map((participant) => (
+                <li key={participant.userId}>
+                  {participant.displayName} ({participant.email})
+                </li>
+              ))}
+            </ul>
+            <p className="mt-3">
+              <a
+                href={availabilityUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-[var(--color-blue)] underline underline-offset-2 hover:opacity-80"
+              >
+                Check their availability here
+              </a>
+              {' '}(opens in a new tab)
+            </p>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button type="button" variant="destructive" onClick={() => void handleCancelMeeting()} disabled={loading}>
+              {loading ? 'Cancelling...' : 'Cancel meeting'}
+            </Button>
+            <Button type="button" onClick={handleKeepMeeting}>
+              Keep meeting
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    )
   }
 
   return (
