@@ -1,0 +1,739 @@
+{
+  "info": {
+    "_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "name": "Mini Doodle API",
+    "description": "# Mini Doodle API\n\nMeeting scheduling platform — backend-only collection for technical evaluation.\n\n## Prerequisites\n\n1. Start the stack: `docker compose up -d --build`\n2. API base URL defaults to `http://localhost:8080/api/v1` (edit the `baseUrl` collection variable if needed).\n\n## Authentication model\n\nThis API uses **JWT access tokens** plus an **httpOnly refresh cookie**:\n\n- After **Register** or **Login**, save `accessToken` from the JSON response (stored in collection variables).\n- Protected requests send `Authorization: Bearer <accessToken>` via the collection pre-request script.\n- Postman stores the `refreshToken` cookie for `POST /auth/refresh` when the access token expires.\n\n## Recommended order\n\nUse the **End-to-End Walkthrough** folder for a guided demo, or explore folders individually:\n\n1. Authentication → register / login\n2. Time Slots → create a FREE slot\n3. Meetings → book on that slot\n4. Users & Availability → search users and query busy intervals\n5. Authentication → logout\n\n## Collection variables\n\n| Variable | Set by | Purpose |\n|----------|--------|----------|\n| `baseUrl` | default | API root |\n| `userId` | Register / Login scripts | Organizer user ID |\n| `participantUserId` | Register Participant script | Second user for invites |\n| `slotId` | Create Slot script | Slot to book or manage |\n| `meetingId` | Book Meeting script | Meeting to update or cancel |\n| `accessToken` | Register / Login scripts | Bearer token for protected endpoints |\n\n## Swagger alternative\n\nOpen http://localhost:8080/swagger-ui.html — use **Authorize** with the access token.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080/api/v1" },
+    { "key": "organizerEmail", "value": "alice@example.com" },
+    { "key": "organizerPassword", "value": "securePass123" },
+    { "key": "participantEmail", "value": "bob@example.com" },
+    { "key": "participantPassword", "value": "securePass123" },
+    { "key": "userId", "value": "" },
+    { "key": "participantUserId", "value": "" },
+    { "key": "slotId", "value": "" },
+    { "key": "meetingId", "value": "" },
+    { "key": "accessToken", "value": "" },
+    { "key": "rangeFrom", "value": "2026-07-15T00:00:00Z" },
+    { "key": "rangeTo", "value": "2026-07-22T00:00:00Z" }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Attach JWT Bearer token for protected endpoints.",
+          "const accessToken = pm.collectionVariables.get('accessToken');",
+          "const url = pm.request.url.toString();",
+          "const isPublicAuth = url.includes('/auth/register') || url.includes('/auth/login') || url.includes('/auth/refresh');",
+          "if (accessToken && !isPublicAuth) {",
+          "    pm.request.headers.upsert({",
+          "        key: 'Authorization',",
+          "        value: 'Bearer ' + accessToken",
+          "    });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Authentication",
+      "description": "User registration, login, profile management, and logout.\n\n**JWT flow:** Register or Login stores `accessToken` in collection variables. All other folders assume you are logged in.\n\n**Tip:** Run **Register** once, then use **Login** on subsequent sessions. Re-running Register with the same email returns 409.",
+      "item": [
+        {
+          "name": "Register",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201 Created', () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('userId', body.user.id);",
+                  "    pm.collectionVariables.set('organizerEmail', body.user.email);",
+                  "    pm.collectionVariables.set('accessToken', body.accessToken);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"displayName\": \"Alice\",\n  \"email\": \"{{organizerEmail}}\",\n  \"password\": \"{{organizerPassword}}\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/register",
+            "description": "Create a new user account.\n\n- **Password:** minimum 8 characters.\n- **Response:** `201` with `{ accessToken, user }`.\n- Saves `accessToken` and `userId` to collection variables."
+          },
+          "response": []
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('userId', body.user.id);",
+                  "    pm.collectionVariables.set('accessToken', body.accessToken);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{organizerEmail}}\",\n  \"password\": \"{{organizerPassword}}\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/login",
+            "description": "Authenticate with email and password.\n\n- **Response:** `200` with `{ accessToken, user }`.\n- Saves `accessToken` to collection variables.\n- Use this at the start of each Postman session if the user already exists."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Current User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "    pm.collectionVariables.set('userId', pm.response.json().id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/auth/me",
+            "description": "Return the profile of the currently authenticated user.\n\n- **Requires:** valid Bearer access token.\n- Useful to verify login succeeded."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"displayName\": \"Alice Organizer\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/me",
+            "description": "Update the authenticated user's display name.\n\n- **Requires:** Bearer access token (added automatically)."
+          },
+          "response": []
+        },
+        {
+          "name": "Change Password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 204 No Content', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"{{organizerPassword}}\",\n  \"newPassword\": \"newSecurePass456\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/change-password",
+            "description": "Change the authenticated user's password.\n\n- **Response:** `204 No Content` on success.\n- New password must be at least 8 characters.\n- Update `organizerPassword` variable if you continue testing."
+          },
+          "response": []
+        },
+        {
+          "name": "Logout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 204 No Content', () => pm.response.to.have.status(204));",
+                  "pm.collectionVariables.set('accessToken', '');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/auth/logout",
+            "description": "Clear the refresh cookie.\n\n- **Requires:** Bearer access token.\n- **Response:** `204 No Content`.\n- Clears the stored `accessToken` collection variable."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. Time Slots",
+      "description": "Manage personal time slots for the authenticated user.\n\n**Statuses:** `FREE` (available for booking) or `BUSY` (blocked without a meeting).\n\n**Duration:** 15–480 minutes.\n\n**Prerequisite:** run **Login** in the Authentication folder first.",
+      "item": [
+        {
+          "name": "List Slots",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Response is an array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/slots?from={{rangeFrom}}&to={{rangeTo}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["slots"],
+              "query": [
+                { "key": "from", "value": "{{rangeFrom}}", "description": "ISO-8601 start (inclusive)" },
+                { "key": "to", "value": "{{rangeTo}}", "description": "ISO-8601 end (exclusive)" }
+              ]
+            },
+            "description": "List the current user's slots within a date range.\n\n- **Query params:** `from`, `to` (ISO-8601 UTC instants).\n- Returns slots overlapping the range."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Slot by ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/slots/{{slotId}}",
+            "description": "Fetch a single slot by UUID.\n\n- Uses `slotId` collection variable (set by **Create Slot**).\n- Returns `404` if the slot does not exist or belongs to another user."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Slot",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201 Created', () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set('slotId', pm.response.json().id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"startAt\": \"2026-07-15T10:00:00Z\",\n  \"durationMinutes\": 60,\n  \"status\": \"FREE\"\n}"
+            },
+            "url": "{{baseUrl}}/slots",
+            "description": "Create a new time slot.\n\n- **status:** `FREE` or `BUSY`.\n- **durationMinutes:** 15–480.\n- Returns `409` if the slot overlaps an existing one.\n- Saves `slotId` for later requests."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Slot",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"startAt\": \"2026-07-15T11:00:00Z\",\n  \"durationMinutes\": 90,\n  \"status\": \"FREE\"\n}"
+            },
+            "url": "{{baseUrl}}/slots/{{slotId}}",
+            "description": "Partially update a slot (start time, duration, and/or status).\n\n- All body fields are optional.\n- Cannot update a slot that has an active meeting."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Slot Status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"BUSY\"\n}"
+            },
+            "url": "{{baseUrl}}/slots/{{slotId}}/status",
+            "description": "Change only the slot status (`FREE` ↔ `BUSY`).\n\n- Shortcut endpoint when you do not need to change time or duration."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Slot",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 204 No Content', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/slots/{{slotId}}",
+            "description": "Delete a slot.\n\n- **Response:** `204 No Content`.\n- Cannot delete a slot with an active meeting — cancel the meeting first."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. Meetings",
+      "description": "Book and manage meetings on time slots.\n\n**Booking rules:**\n- Only the slot owner can book on their own **FREE** slot.\n- Booking marks the slot as busy and creates a meeting.\n- Participants are invited by email (registered users are linked automatically).\n- Cancelling a meeting frees the slot for rebooking.\n\n**Prerequisite:** create a FREE slot and set `slotId`.",
+      "item": [
+        {
+          "name": "Book Meeting",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201 Created', () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set('meetingId', pm.response.json().id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Team sync\",\n  \"description\": \"Weekly standup\",\n  \"participantEmails\": [\"{{participantEmail}}\"]\n}"
+            },
+            "url": "{{baseUrl}}/slots/{{slotId}}/meeting",
+            "description": "Book a meeting on a FREE slot.\n\n- **participantEmails:** optional list of invitee emails.\n- Returns `409` if the slot is not FREE.\n- Saves `meetingId` for update/cancel requests."
+          },
+          "response": []
+        },
+        {
+          "name": "List Meetings",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Response is an array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/meetings",
+            "description": "List all meetings where the current user is organizer or participant.\n\n- Each item includes `role`: `ORGANIZER` or `PARTICIPANT`."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Meeting by ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/meetings/{{meetingId}}",
+            "description": "Fetch meeting details including participants and time range.\n\n- Uses `meetingId` collection variable."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Meeting",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Team sync (updated)\",\n  \"description\": \"Agenda shared\",\n  \"participantEmails\": [\"{{participantEmail}}\"]\n}"
+            },
+            "url": "{{baseUrl}}/meetings/{{meetingId}}",
+            "description": "Update meeting title, description, and/or participant list.\n\n- Only the organizer can update.\n- All body fields are optional."
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel Meeting",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 204 No Content', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/meetings/{{meetingId}}",
+            "description": "Cancel a meeting (organizer only).\n\n- **Response:** `204 No Content`.\n- Frees the associated time slot so it can be booked again."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. Users & Availability",
+      "description": "Search for users and query busy intervals across multiple users.\n\nUseful for finding colleagues and checking when they are unavailable before booking.",
+      "item": [
+        {
+          "name": "Search Users",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Response is an array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/users/search?q=alice",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "search"],
+              "query": [
+                { "key": "q", "value": "alice", "description": "Search by display name or email (partial match)" }
+              ]
+            },
+            "description": "Search users by display name or email substring.\n\n- Returns up to 20 matches.\n- Excludes the current user from results."
+          },
+          "response": []
+        },
+        {
+          "name": "Query Availability",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Response has users array', () => pm.expect(pm.response.json().users).to.be.an('array'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/availability?userIds={{userId}},{{participantUserId}}&from={{rangeFrom}}&to={{rangeTo}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["availability"],
+              "query": [
+                { "key": "userIds", "value": "{{userId}},{{participantUserId}}", "description": "Comma-separated user UUIDs" },
+                { "key": "from", "value": "{{rangeFrom}}" },
+                { "key": "to", "value": "{{rangeTo}}" }
+              ]
+            },
+            "description": "Return busy intervals for one or more users in a date range.\n\n- **userIds:** comma-separated UUIDs (`userId` and `participantUserId` variables).\n- Each user entry includes `busyIntervals` with slot/meeting metadata."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "5. End-to-End Walkthrough",
+      "description": "Run these requests **in order** (use Collection Runner or execute sequentially).\n\nThis demonstrates the full scheduling flow:\n1. Register organizer and participant\n2. Login as organizer\n3. Create a slot and book a meeting\n4. Inspect meetings and availability\n5. Cancel and logout\n\n**Note:** Step 1–2 will fail with `409` if emails already exist — skip to **Login as Organizer** instead.",
+      "item": [
+        {
+          "name": "1. Register Organizer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('userId', body.user.id);",
+                  "    pm.collectionVariables.set('accessToken', body.accessToken);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"displayName\": \"Alice\",\n  \"email\": \"{{organizerEmail}}\",\n  \"password\": \"{{organizerPassword}}\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/register"
+          },
+          "response": []
+        },
+        {
+          "name": "2. Register Participant",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set('participantUserId', pm.response.json().user.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"displayName\": \"Bob\",\n  \"email\": \"{{participantEmail}}\",\n  \"password\": \"{{participantPassword}}\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/register",
+            "description": "Creates the second user. Their email will be used as a meeting participant."
+          },
+          "response": []
+        },
+        {
+          "name": "3. Login as Organizer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Logged in', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "    pm.collectionVariables.set('userId', pm.response.json().user.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{organizerEmail}}\",\n  \"password\": \"{{organizerPassword}}\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/login"
+          },
+          "response": []
+        },
+        {
+          "name": "4. Create FREE Slot",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Slot created', () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set('slotId', pm.response.json().id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"startAt\": \"2026-07-15T14:00:00Z\",\n  \"durationMinutes\": 60,\n  \"status\": \"FREE\"\n}"
+            },
+            "url": "{{baseUrl}}/slots"
+          },
+          "response": []
+        },
+        {
+          "name": "5. Book Meeting",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Meeting booked', () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set('meetingId', pm.response.json().id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Project kickoff\",\n  \"description\": \"Discuss milestones\",\n  \"participantEmails\": [\"{{participantEmail}}\"]\n}"
+            },
+            "url": "{{baseUrl}}/slots/{{slotId}}/meeting"
+          },
+          "response": []
+        },
+        {
+          "name": "6. List My Meetings",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/meetings"
+          },
+          "response": []
+        },
+        {
+          "name": "7. Query Availability",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/availability?userIds={{userId}},{{participantUserId}}&from={{rangeFrom}}&to={{rangeTo}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["availability"],
+              "query": [
+                { "key": "userIds", "value": "{{userId}},{{participantUserId}}" },
+                { "key": "from", "value": "{{rangeFrom}}" },
+                { "key": "to", "value": "{{rangeTo}}" }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "8. Cancel Meeting",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/meetings/{{meetingId}}"
+          },
+          "response": []
+        },
+        {
+          "name": "9. Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/auth/logout"
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
