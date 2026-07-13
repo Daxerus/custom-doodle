@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { getErrorMessage } from '@/lib/api'
+import { registerSchema } from '@/lib/schemas'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -21,17 +22,14 @@ export function RegisterPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
-    if (password !== confirmPassword) {
-      setError('Passwords do not match')
-      return
-    }
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters')
+    const parsed = registerSchema.safeParse({ displayName, email, password, confirmPassword })
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message ?? 'Invalid form data')
       return
     }
     setLoading(true)
     try {
-      await register(displayName, email, password)
+      await register(parsed.data.displayName, parsed.data.email, parsed.data.password)
       navigate('/schedule')
     } catch (err) {
       setError(getErrorMessage(err))

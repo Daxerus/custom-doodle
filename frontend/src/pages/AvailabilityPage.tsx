@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { addDays, format } from 'date-fns'
-import { availabilityApi, usersApi } from '@/lib/api'
+import { availabilityApi, getErrorMessage, usersApi } from '@/lib/api'
 import type { BusyInterval, User } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -56,7 +56,7 @@ export function AvailabilityPage() {
     enabled: search.length >= 2,
   })
 
-  const { data: availability, isLoading, isFetching } = useQuery({
+  const { data: availability, isLoading, isFetching, isError, error: queryError } = useQuery({
     queryKey: ['availability', queryParams],
     queryFn: () => availabilityApi.query(queryParams!.userIds, queryParams!.from, queryParams!.to),
     enabled: !!queryParams,
@@ -169,6 +169,8 @@ export function AvailabilityPage() {
         <EmptyState title="Select users and a date range" description="Search for users and click Query availability to see their busy times." />
       ) : isLoading ? (
         <div className="h-48 animate-pulse rounded-lg bg-[var(--color-muted)]" />
+      ) : isError ? (
+        <ApiErrorAlert message={getErrorMessage(queryError)} />
       ) : availability ? (
         <div className="space-y-4">
           <div className="flex gap-4 text-xs">

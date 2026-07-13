@@ -12,6 +12,15 @@ export interface AuthResponse {
   user: User
 }
 
+export interface PageResponse<T> {
+  content: T[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+  last: boolean
+}
+
 export interface Slot {
   id: string
   startAt: string
@@ -74,8 +83,14 @@ export interface AvailabilityResponse {
   users: UserAvailability[]
 }
 
-export interface ApiError {
+export interface UpdateSlotRequest {
+  startAt?: string
+  durationMinutes?: number
+  status?: SlotStatus
+}
+
+export interface UpdateMeetingRequest {
   title?: string
-  detail?: string
-  status?: number
+  description?: string
+  participantEmails?: string[]
 }
