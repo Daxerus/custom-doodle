@@ -22,6 +22,9 @@ A mini meeting scheduling platform. Users manage time slots, book meetings, and 
 # Start database and backend (rebuild image after backend changes)
 docker compose up -d --build
 
+# Full stack including frontend (single command)
+docker compose -f docker-compose.full.yml up -d --build
+
 # Backend tests (without Docker)
 cd backend
 ./mvnw verify
@@ -34,7 +37,8 @@ npm run dev
 
 | Service | URL |
 |---------|-----|
-| Frontend | http://localhost:5173 |
+| Frontend (dev) | http://localhost:5173 |
+| Frontend (docker full) | http://localhost:3000 |
 | API | http://localhost:8080 |
 | Swagger UI | http://localhost:8080/swagger-ui.html |
 
