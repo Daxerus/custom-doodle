@@ -4,7 +4,10 @@ import type {
   AuthResponse,
   AvailabilityResponse,
   Meeting,
+  PageResponse,
   Slot,
+  UpdateMeetingRequest,
+  UpdateSlotRequest,
   User,
 } from '@/types'
 
@@ -14,6 +17,7 @@ const api = axios.create({
 })
 
 let accessToken: string | null = null
+let onAuthFailure: (() => void) | null = null
 
 export function setAccessToken(token: string | null) {
   accessToken = token
@@ -21,6 +25,10 @@ export function setAccessToken(token: string | null) {
 
 export function getAccessToken() {
   return accessToken
+}
+
+export function setOnAuthFailure(callback: (() => void) | null) {
+  onAuthFailure = callback
 }
 
 api.interceptors.request.use((config) => {
@@ -53,6 +61,7 @@ api.interceptors.response.use(
         return api(original)
       } catch {
         setAccessToken(null)
+        onAuthFailure?.()
       }
     }
     return Promise.reject(error)
@@ -82,12 +91,13 @@ export const authApi = {
 }
 
 export const slotsApi = {
-  list: (from: string, to: string) =>
-    api.get<Slot[]>('/slots', { params: { from, to } }).then((r) => r.data),
-  get: (id: string) => api.get<Slot>(`/slots/${id}`).then((r) => r.data),
+  list: (from: string, to: string, page = 0, size = 50) =>
+    api
+      .get<PageResponse<Slot>>('/slots', { params: { from, to, page, size } })
+      .then((r) => r.data),
   create: (data: { startAt: string; durationMinutes: number; status: string }) =>
     api.post<Slot>('/slots', data).then((r) => r.data),
-  update: (id: string, data: Record<string, unknown>) =>
+  update: (id: string, data: UpdateSlotRequest) =>
     api.patch<Slot>(`/slots/${id}`, data).then((r) => r.data),
   updateStatus: (id: string, status: string) =>
     api.patch<Slot>(`/slots/${id}/status`, { status }).then((r) => r.data),
@@ -95,13 +105,17 @@ export const slotsApi = {
 }
 
 export const meetingsApi = {
-  list: () => api.get<Meeting[]>('/meetings').then((r) => r.data.map(normalizeMeeting)),
+  list: (page = 0, size = 50) =>
+    api
+      .get<PageResponse<Meeting>>('/meetings', { params: { page, size } })
+      .then((r) => ({ ...r.data, content: r.data.content.map(normalizeMeeting) })),
   get: (id: string) => api.get<Meeting>(`/meetings/${id}`).then((r) => normalizeMeeting(r.data)),
   book: (slotId: string, data: { title: string; description?: string; participantEmails?: string[] }) =>
     api.post<Meeting>(`/slots/${slotId}/meeting`, data).then((r) => normalizeMeeting(r.data)),
-  update: (id: string, data: Record<string, unknown>) =>
+  update: (id: string, data: UpdateMeetingRequest) =>
     api.patch<Meeting>(`/meetings/${id}`, data).then((r) => normalizeMeeting(r.data)),
-  cancel: (id: string) => api.delete(`/meetings/${id}`),
+  cancel: (id: string) =>
+    api.delete<Meeting>(`/meetings/${id}`).then((r) => normalizeMeeting(r.data)),
 }
 
 export const availabilityApi = {

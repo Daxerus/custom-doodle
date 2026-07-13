@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { getErrorMessage } from '@/lib/api'
+import { loginSchema } from '@/lib/schemas'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -19,9 +20,14 @@ export function LoginPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
+    const parsed = loginSchema.safeParse({ email, password })
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message ?? 'Invalid form data')
+      return
+    }
     setLoading(true)
     try {
-      await login(email, password)
+      await login(parsed.data.email, parsed.data.password)
       navigate('/schedule')
     } catch (err) {
       setError(getErrorMessage(err))
