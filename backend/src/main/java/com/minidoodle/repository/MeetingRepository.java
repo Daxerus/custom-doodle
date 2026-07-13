@@ -2,7 +2,8 @@ package com.minidoodle.repository;
 
 import com.minidoodle.domain.Meeting;
 import com.minidoodle.domain.MeetingStatus;
-import com.minidoodle.domain.ParticipantInvitationStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -23,11 +24,14 @@ public interface MeetingRepository extends JpaRepository<Meeting, UUID> {
                OR m.id IN (
                     SELECT mp.meetingId FROM MeetingParticipant mp
                     WHERE mp.userId = :userId
-                      AND mp.invitationStatus = com.minidoodle.domain.ParticipantInvitationStatus.INVITED
+                      AND mp.invitationStatus IN (
+                          com.minidoodle.domain.ParticipantInvitationStatus.INVITED,
+                          com.minidoodle.domain.ParticipantInvitationStatus.INVITED_BUSY
+                      )
                )
             ORDER BY m.createdAt DESC
             """)
-    List<Meeting> findAllForUser(@Param("userId") UUID userId);
+    Page<Meeting> findAllForUser(@Param("userId") UUID userId, Pageable pageable);
 
     @Query("""
             SELECT m FROM Meeting m
@@ -35,6 +39,4 @@ public interface MeetingRepository extends JpaRepository<Meeting, UUID> {
               AND m.timeSlotId IN :slotIds
             """)
     List<Meeting> findScheduledByTimeSlotIds(@Param("slotIds") List<UUID> slotIds);
-
-    List<Meeting> findByOrganizerIdAndStatusOrderByCreatedAtDesc(UUID organizerId, MeetingStatus status);
 }

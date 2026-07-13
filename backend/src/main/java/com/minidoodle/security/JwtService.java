@@ -28,21 +28,22 @@ public class JwtService {
         this.refreshTokenExpirationMs = properties.getJwt().getRefreshTokenExpirationMs();
     }
 
-    public String generateAccessToken(UUID userId, String email) {
-        return buildToken(userId, email, accessTokenExpirationMs, "access");
+    public String generateAccessToken(UUID userId, String email, long tokenVersion) {
+        return buildToken(userId, email, accessTokenExpirationMs, "access", tokenVersion);
     }
 
-    public String generateRefreshToken(UUID userId, String email) {
-        return buildToken(userId, email, refreshTokenExpirationMs, "refresh");
+    public String generateRefreshToken(UUID userId, String email, long tokenVersion) {
+        return buildToken(userId, email, refreshTokenExpirationMs, "refresh", tokenVersion);
     }
 
-    private String buildToken(UUID userId, String email, long expirationMs, String type) {
+    private String buildToken(UUID userId, String email, long expirationMs, String type, long tokenVersion) {
         Date now = new Date();
         Date expiry = new Date(now.getTime() + expirationMs);
         return Jwts.builder()
                 .subject(userId.toString())
                 .claim("email", email)
                 .claim("type", type)
+                .claim("tv", tokenVersion)
                 .issuedAt(now)
                 .expiration(expiry)
                 .signWith(secretKey)
@@ -67,6 +68,11 @@ public class JwtService {
 
     public UUID getUserId(Claims claims) {
         return UUID.fromString(claims.getSubject());
+    }
+
+    public long getTokenVersion(Claims claims) {
+        Long version = claims.get("tv", Long.class);
+        return version != null ? version : 0L;
     }
 
     public long getRefreshTokenExpirationMs() {
