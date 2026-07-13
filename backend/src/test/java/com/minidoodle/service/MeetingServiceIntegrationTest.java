@@ -1,6 +1,7 @@
 package com.minidoodle.service;
 
 import com.minidoodle.domain.MeetingStatus;
+import com.minidoodle.domain.ParticipantInvitationStatus;
 import com.minidoodle.domain.SlotStatus;
 import com.minidoodle.dto.BookMeetingRequest;
 import com.minidoodle.dto.CreateSlotRequest;
@@ -37,8 +38,8 @@ class MeetingServiceIntegrationTest {
 
     @Test
     void bookMeeting_afterCancel_allowsRebookOnSameSlot() {
-        UserResponse user = UserResponse.from(authService.register(
-                new RegisterRequest("Alice", "rebook-test@example.com", "password123")));
+        UserResponse user = authService.register(
+                new RegisterRequest("Alice", "rebook-test@example.com", "password123")).user();
         Instant start = Instant.parse("2026-10-01T10:00:00Z");
 
         var slot = slotService.createSlot(user.id(), new CreateSlotRequest(start, 60, SlotStatus.FREE));
@@ -69,5 +70,50 @@ class MeetingServiceIntegrationTest {
         assertThat(meetingsOnSlot)
                 .extracting(m -> m.getStatus())
                 .containsExactlyInAnyOrder(MeetingStatus.CANCELLED, MeetingStatus.SCHEDULED);
+    }
+
+    @Test
+    void bookMeeting_reportsUnavailableRegisteredParticipantsWithoutBlocking() {
+        UserResponse alice = authService.register(
+                new RegisterRequest("Alice", "alice-unavail@example.com", "password123")).user();
+        UserResponse bob = authService.register(
+                new RegisterRequest("Bob", "bob-unavail@example.com", "password123")).user();
+        Instant start = Instant.parse("2026-11-01T10:00:00Z");
+
+        var aliceSlot = slotService.createSlot(alice.id(), new CreateSlotRequest(start, 60, SlotStatus.FREE));
+        slotService.createSlot(bob.id(), new CreateSlotRequest(start, 60, SlotStatus.BUSY));
+
+        var meeting = meetingService.bookMeeting(
+                alice.id(),
+                aliceSlot.id(),
+                new BookMeetingRequest("Sync", "Weekly", List.of("bob-unavail@example.com")));
+
+        assertThat(meeting.status()).isEqualTo(MeetingStatus.SCHEDULED);
+        assertThat(meeting.unavailableParticipants()).hasSize(1);
+        assertThat(meeting.unavailableParticipants().getFirst().email()).isEqualTo("bob-unavail@example.com");
+        assertThat(meeting.unavailableParticipants().getFirst().userId()).isEqualTo(bob.id());
+        assertThat(meeting.participants().getFirst().invitationStatus()).isEqualTo(ParticipantInvitationStatus.INVITED_BUSY);
+        assertThat(meetingService.listMeetings(bob.id())).isEmpty();
+    }
+
+    @Test
+    void bookMeeting_noUnavailableWhenParticipantHasFreeSlot() {
+        UserResponse alice = authService.register(
+                new RegisterRequest("Alice", "alice-avail@example.com", "password123")).user();
+        UserResponse bob = authService.register(
+                new RegisterRequest("Bob", "bob-avail@example.com", "password123")).user();
+        Instant start = Instant.parse("2026-11-02T10:00:00Z");
+
+        var aliceSlot = slotService.createSlot(alice.id(), new CreateSlotRequest(start, 60, SlotStatus.FREE));
+        slotService.createSlot(bob.id(), new CreateSlotRequest(start, 60, SlotStatus.FREE));
+
+        var meeting = meetingService.bookMeeting(
+                alice.id(),
+                aliceSlot.id(),
+                new BookMeetingRequest("Sync", "Weekly", List.of("bob-avail@example.com")));
+
+        assertThat(meeting.unavailableParticipants()).isEmpty();
+        assertThat(meeting.participants().getFirst().invitationStatus()).isEqualTo(ParticipantInvitationStatus.INVITED);
+        assertThat(meetingService.listMeetings(bob.id())).hasSize(1);
     }
 }

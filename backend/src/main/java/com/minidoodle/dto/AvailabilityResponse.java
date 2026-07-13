@@ -15,7 +15,8 @@ public record AvailabilityResponse(
             UUID userId,
             String displayName,
             String email,
-            List<BusyInterval> busyIntervals
+            List<BusyInterval> busyIntervals,
+            boolean hasFreeSlotInRange
     ) {
     }
 
