@@ -197,7 +197,7 @@
             "method": "POST",
             "header": [],
             "url": "{{baseUrl}}/auth/logout",
-            "description": "Clear the refresh cookie.\n\n- **Requires:** Bearer access token.\n- **Response:** `204 No Content`.\n- Clears the stored `accessToken` collection variable."
+            "description": "Invalidate all access and refresh tokens for the user and clear the refresh cookie.\n\n- **Requires:** Bearer access token (collection pre-request script).\n- **Response:** `204 No Content`.\n- Clears the stored `accessToken` collection variable.\n- After logout, `GET /auth/me` with the same token returns `401`."
           },
           "response": []
         }
@@ -216,7 +216,11 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));",
-                  "pm.test('Response is an array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                  "pm.test('Response has paginated content', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.content).to.be.an('array');",
+                  "    pm.expect(body.totalElements).to.be.a('number');",
+                  "});"
                 ]
               }
             }
@@ -230,31 +234,12 @@
               "path": ["slots"],
               "query": [
                 { "key": "from", "value": "{{rangeFrom}}", "description": "ISO-8601 start (inclusive)" },
-                { "key": "to", "value": "{{rangeTo}}", "description": "ISO-8601 end (exclusive)" }
+                { "key": "to", "value": "{{rangeTo}}", "description": "ISO-8601 end (exclusive)" },
+                { "key": "page", "value": "0", "description": "Page number (0-based)" },
+                { "key": "size", "value": "50", "description": "Page size (max 100)" }
               ]
             },
-            "description": "List the current user's slots within a date range.\n\n- **Query params:** `from`, `to` (ISO-8601 UTC instants).\n- Returns slots overlapping the range."
-          },
-          "response": []
-        },
-        {
-          "name": "Get Slot by ID",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{baseUrl}}/slots/{{slotId}}",
-            "description": "Fetch a single slot by UUID.\n\n- Uses `slotId` collection variable (set by **Create Slot**).\n- Returns `404` if the slot does not exist or belongs to another user."
+            "description": "List the current user's slots within a date range.\n\n- **Query params:** `from`, `to` (ISO-8601 UTC instants), optional `page` and `size`.\n- Returns a paginated response with `content`, `totalElements`, etc."
           },
           "response": []
         },
@@ -400,7 +385,11 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));",
-                  "pm.test('Response is an array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                  "pm.test('Response has paginated content', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.content).to.be.an('array');",
+                  "    pm.expect(body.totalElements).to.be.a('number');",
+                  "});"
                 ]
               }
             }
@@ -408,8 +397,16 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": "{{baseUrl}}/meetings",
-            "description": "List all meetings where the current user is organizer or participant.\n\n- Each item includes `role`: `ORGANIZER` or `PARTICIPANT`."
+            "url": {
+              "raw": "{{baseUrl}}/meetings?page=0&size=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["meetings"],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "50" }
+              ]
+            },
+            "description": "List meetings where the current user is organizer or participant (paginated).\n\n- Query params: `page` (0-based), `size` (max 100).\n- Each item includes `role`: `ORGANIZER` or `PARTICIPANT`."
           },
           "response": []
         },
@@ -467,7 +464,12 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status is 204 No Content', () => pm.response.to.have.status(204));"
+                  "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Meeting is cancelled', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.status).to.eql('CANCELLED');",
+                  "    pm.expect(body.id).to.eql(pm.collectionVariables.get('meetingId'));",
+                  "});"
                 ]
               }
             }
@@ -476,7 +478,7 @@
             "method": "DELETE",
             "header": [],
             "url": "{{baseUrl}}/meetings/{{meetingId}}",
-            "description": "Cancel a meeting (organizer only).\n\n- **Response:** `204 No Content`.\n- Frees the associated time slot so it can be booked again."
+            "description": "Cancel a meeting (organizer only).\n\n- **Response:** `200 OK` with the cancelled `MeetingResponse` (`status: CANCELLED`).\n- Frees the associated time slot so it can be booked again."
           },
           "response": []
         }
