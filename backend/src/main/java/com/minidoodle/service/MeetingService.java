@@ -53,7 +53,7 @@ public class MeetingService {
             throw new ApiException("slot-not-free", "Only free slots can be booked", HttpStatus.CONFLICT);
         }
 
-        if (meetingRepository.findByTimeSlotId(slotId).isPresent()) {
+        if (meetingRepository.existsByTimeSlotIdAndStatus(slotId, MeetingStatus.SCHEDULED)) {
             throw new ApiException("slot-already-booked", "Slot already has a meeting", HttpStatus.CONFLICT);
         }
 

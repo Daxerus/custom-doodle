@@ -60,7 +60,7 @@ Mini Doodle is a high-performance meeting scheduling platform. Users manage pers
 |----|-------------|---------------------|
 | R4.1 | Durable storage | All data survives service restarts |
 | R4.2 | Migrations | Schema versioned via Flyway |
-| R4.3 | Integrity | FK constraints, unique slot-meeting link, optimistic locking |
+| R4.3 | Integrity | FK constraints, at most one scheduled meeting per slot, optimistic locking |
 
 ### R5 — Local Runtime
 

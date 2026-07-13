@@ -17,7 +17,7 @@ public class Meeting {
     @Id
     private UUID id;
 
-    @Column(name = "time_slot_id", nullable = false, unique = true)
+    @Column(name = "time_slot_id", nullable = false)
     private UUID timeSlotId;
 
     @Column(name = "organizer_id", nullable = false)
