@@ -95,7 +95,7 @@ erDiagram
 
 1. One `Calendar` per `User` (auto-created on registration).
 2. Only `FREE` slots can be booked as meetings.
-3. Booking sets slot to `BUSY` and creates a 1:1 `Meeting`.
+3. Booking sets slot to `BUSY` and creates a `Meeting` with status `SCHEDULED` (at most one scheduled meeting per slot).
 4. Cancelling a meeting sets slot back to `FREE`.
 5. Overlapping slots for the same calendar are rejected.
 6. All timestamps stored in UTC.

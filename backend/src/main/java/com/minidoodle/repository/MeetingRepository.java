@@ -12,7 +12,9 @@ import java.util.UUID;
 
 public interface MeetingRepository extends JpaRepository<Meeting, UUID> {
 
-    Optional<Meeting> findByTimeSlotId(UUID timeSlotId);
+    Optional<Meeting> findByTimeSlotIdAndStatus(UUID timeSlotId, MeetingStatus status);
+
+    boolean existsByTimeSlotIdAndStatus(UUID timeSlotId, MeetingStatus status);
 
     @Query("""
             SELECT m FROM Meeting m

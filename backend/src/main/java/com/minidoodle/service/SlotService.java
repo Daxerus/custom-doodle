@@ -1,6 +1,6 @@
 package com.minidoodle.service;
 
-import com.minidoodle.domain.Meeting;
+import com.minidoodle.domain.MeetingStatus;
 import com.minidoodle.domain.SlotStatus;
 import com.minidoodle.domain.TimeSlot;
 import com.minidoodle.dto.CreateSlotRequest;
@@ -64,7 +64,7 @@ public class SlotService {
     public SlotResponse updateSlot(UUID userId, UUID slotId, UpdateSlotRequest request) {
         TimeSlot slot = getOwnedSlot(userId, slotId);
 
-        if (meetingRepository.findByTimeSlotId(slotId).filter(m -> m.getStatus().name().equals("SCHEDULED")).isPresent()) {
+        if (meetingRepository.existsByTimeSlotIdAndStatus(slotId, MeetingStatus.SCHEDULED)) {
             if (request.startAt() != null || request.durationMinutes() != null) {
                 throw new ApiException("slot-has-meeting", "Cannot change time of a slot with an active meeting", HttpStatus.CONFLICT);
             }
@@ -125,9 +125,8 @@ public class SlotService {
     }
 
     private UUID getMeetingId(UUID slotId) {
-        return meetingRepository.findByTimeSlotId(slotId)
-                .filter(m -> m.getStatus().name().equals("SCHEDULED"))
-                .map(Meeting::getId)
+        return meetingRepository.findByTimeSlotIdAndStatus(slotId, MeetingStatus.SCHEDULED)
+                .map(meeting -> meeting.getId())
                 .orElse(null);
     }
 }
