@@ -9,6 +9,7 @@ public class MiniDoodleProperties {
 
     private Jwt jwt = new Jwt();
     private Cors cors = new Cors();
+    private boolean cookieSecure = false;
 
     public Jwt getJwt() {
         return jwt;
@@ -24,6 +25,14 @@ public class MiniDoodleProperties {
 
     public void setCors(Cors cors) {
         this.cors = cors;
+    }
+
+    public boolean isCookieSecure() {
+        return cookieSecure;
+    }
+
+    public void setCookieSecure(boolean cookieSecure) {
+        this.cookieSecure = cookieSecure;
     }
 
     public static class Jwt {

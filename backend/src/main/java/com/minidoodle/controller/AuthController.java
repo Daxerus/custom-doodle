@@ -1,5 +1,6 @@
 package com.minidoodle.controller;
 
+import com.minidoodle.config.MiniDoodleProperties;
 import com.minidoodle.dto.AuthResponse;
 import com.minidoodle.dto.ChangePasswordRequest;
 import com.minidoodle.dto.LoginRequest;
@@ -7,6 +8,7 @@ import com.minidoodle.dto.RegisterRequest;
 import com.minidoodle.dto.UpdateProfileRequest;
 import com.minidoodle.dto.UserResponse;
 import com.minidoodle.exception.ApiException;
+import com.minidoodle.security.AuthUser;
 import com.minidoodle.security.JwtService;
 import com.minidoodle.security.SecurityUtils;
 import com.minidoodle.service.AuthService;
@@ -16,6 +18,8 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -34,10 +38,12 @@ public class AuthController {
 
     private final AuthService authService;
     private final JwtService jwtService;
+    private final MiniDoodleProperties properties;
 
-    public AuthController(AuthService authService, JwtService jwtService) {
+    public AuthController(AuthService authService, JwtService jwtService, MiniDoodleProperties properties) {
         this.authService = authService;
         this.jwtService = jwtService;
+        this.properties = properties;
     }
 
     @PostMapping("/register")
@@ -45,8 +51,7 @@ public class AuthController {
             @Valid @RequestBody RegisterRequest request,
             HttpServletResponse response) {
         AuthResponse auth = authService.register(request);
-        setRefreshCookie(response, authService.generateRefreshToken(
-                auth.user().id(), auth.user().email()));
+        setRefreshCookie(response, authService.generateRefreshToken(auth.user().id()));
         return ResponseEntity.status(HttpStatus.CREATED).body(auth);
     }
 
@@ -55,8 +60,7 @@ public class AuthController {
             @Valid @RequestBody LoginRequest request,
             HttpServletResponse response) {
         AuthResponse auth = authService.login(request);
-        setRefreshCookie(response, authService.generateRefreshToken(
-                auth.user().id(), auth.user().email()));
+        setRefreshCookie(response, authService.generateRefreshToken(auth.user().id()));
         return ResponseEntity.ok(auth);
     }
 
@@ -75,8 +79,9 @@ public class AuthController {
         }
 
         UUID userId = jwtService.getUserId(claims);
+        authService.validateRefreshToken(userId, jwtService.getTokenVersion(claims));
         AuthResponse auth = authService.refresh(userId);
-        setRefreshCookie(response, authService.generateRefreshToken(userId, auth.user().email()));
+        setRefreshCookie(response, authService.generateRefreshToken(userId));
         return ResponseEntity.ok(auth);
     }
 
@@ -98,21 +103,29 @@ public class AuthController {
 
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(HttpServletResponse response) {
-        Cookie cookie = new Cookie(REFRESH_COOKIE, "");
-        cookie.setHttpOnly(true);
-        cookie.setSecure(false);
-        cookie.setPath("/api/v1/auth");
-        cookie.setMaxAge(0);
-        response.addCookie(cookie);
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.getPrincipal() instanceof AuthUser authUser) {
+            authService.logout(authUser.getId());
+        }
+        clearRefreshCookie(response);
         return ResponseEntity.noContent().build();
     }
 
     private void setRefreshCookie(HttpServletResponse response, String refreshToken) {
         Cookie cookie = new Cookie(REFRESH_COOKIE, refreshToken);
         cookie.setHttpOnly(true);
-        cookie.setSecure(false);
+        cookie.setSecure(properties.isCookieSecure());
         cookie.setPath("/api/v1/auth");
         cookie.setMaxAge((int) (jwtService.getRefreshTokenExpirationMs() / 1000));
+        response.addCookie(cookie);
+    }
+
+    private void clearRefreshCookie(HttpServletResponse response) {
+        Cookie cookie = new Cookie(REFRESH_COOKIE, "");
+        cookie.setHttpOnly(true);
+        cookie.setSecure(properties.isCookieSecure());
+        cookie.setPath("/api/v1/auth");
+        cookie.setMaxAge(0);
         response.addCookie(cookie);
     }
 
