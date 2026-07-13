@@ -7,30 +7,55 @@ import type {
   User,
 } from '@/types'
 
-function getCsrfToken(): string | null {
-  const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/)
-  return match ? decodeURIComponent(match[1]) : null
-}
-
 const api = axios.create({
   baseURL: '/api/v1',
   withCredentials: true,
 })
 
+let accessToken: string | null = null
+
+export function setAccessToken(token: string | null) {
+  accessToken = token
+}
+
+export function getAccessToken() {
+  return accessToken
+}
+
 api.interceptors.request.use((config) => {
-  const method = config.method?.toLowerCase()
-  if (method && ['post', 'put', 'patch', 'delete'].includes(method)) {
-    const csrf = getCsrfToken()
-    if (csrf) {
-      config.headers['X-XSRF-TOKEN'] = csrf
-    }
+  if (accessToken) {
+    config.headers.Authorization = `Bearer ${accessToken}`
   }
   return config
 })
 
 api.interceptors.response.use(
   (response) => response,
-  (error: AxiosError) => Promise.reject(error),
+  async (error: AxiosError) => {
+    const original = error.config
+    if (
+      error.response?.status === 401 &&
+      original &&
+      !original.url?.includes('/auth/login') &&
+      !original.url?.includes('/auth/register') &&
+      !original._retry
+    ) {
+      original._retry = true
+      try {
+        const { data } = await axios.post<AuthResponse>(
+          '/api/v1/auth/refresh',
+          {},
+          { withCredentials: true },
+        )
+        setAccessToken(data.accessToken)
+        original.headers.Authorization = `Bearer ${data.accessToken}`
+        return api(original)
+      } catch {
+        setAccessToken(null)
+      }
+    }
+    return Promise.reject(error)
+  },
 )
 
 export function getErrorMessage(error: unknown): string {
@@ -46,6 +71,7 @@ export const authApi = {
     api.post<AuthResponse>('/auth/register', data).then((r) => r.data),
   login: (data: { email: string; password: string }) =>
     api.post<AuthResponse>('/auth/login', data).then((r) => r.data),
+  refresh: () => api.post<AuthResponse>('/auth/refresh').then((r) => r.data),
   me: () => api.get<User>('/auth/me').then((r) => r.data),
   updateProfile: (displayName: string) =>
     api.put<User>('/auth/me', { displayName }).then((r) => r.data),
@@ -88,4 +114,10 @@ export const availabilityApi = {
 
 export const usersApi = {
   search: (q: string) => api.get<User[]>('/users/search', { params: { q } }).then((r) => r.data),
+}
+
+declare module 'axios' {
+  export interface AxiosRequestConfig {
+    _retry?: boolean
+  }
 }

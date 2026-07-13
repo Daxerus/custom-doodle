@@ -8,7 +8,7 @@ A mini meeting scheduling platform. Users manage time slots, book meetings, and 
 |-------|------------|
 | Backend | Java 21, Spring Boot 3.4, PostgreSQL |
 | Frontend | React, TypeScript, Vite, shadcn/ui |
-| Auth | HTTP sessions (JSESSIONID cookie) |
+| Auth | JWT (access token + refresh cookie) |
 
 ## Prerequisites
 
@@ -19,8 +19,8 @@ A mini meeting scheduling platform. Users manage time slots, book meetings, and 
 ## Quick Start
 
 ```bash
-# Start database and backend
-docker compose up -d
+# Start database and backend (rebuild image after backend changes)
+docker compose up -d --build
 
 # Backend tests (without Docker)
 cd backend
@@ -42,7 +42,8 @@ npm run dev
 
 - [Requirements](docs/requirements.md)
 - [Architecture](docs/architecture.md)
-- [API Guide](docs/api-guide.md)
+- [API Guide](docs/api-guide.md) — curl, Swagger, and Postman
+- [Postman Collection](docs/postman/Mini-Doodle-API.postman_collection.json) — import to test the API without the frontend
 - [UI Design Brief](docs/views/design-brief.md)
 
 ## Development Workflow

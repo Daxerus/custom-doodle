@@ -23,6 +23,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/minidoodle
       SPRING_DATASOURCE_USERNAME: minidoodle
       SPRING_DATASOURCE_PASSWORD: minidoodle
+      JWT_SECRET: local-dev-secret-change-in-production-32chars
       CORS_ORIGINS: http://localhost:5173
     depends_on:
       postgres:

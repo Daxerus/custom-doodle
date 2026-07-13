@@ -20,14 +20,14 @@ flowchart TB
     subgraph frontend [Frontend - React]
         UI[shadcn UI Pages]
         RQ[TanStack Query]
-        AuthCtx[Auth Context + Session]
+        AuthCtx[Auth Context + JWT]
     end
 
     subgraph backend [Backend - Spring Boot]
         API[REST Controllers]
         SVC[Domain Services]
         REPO[JPA Repositories]
-        SEC[Spring Security Sessions]
+        SEC[Spring Security JWT]
     end
 
     subgraph infra [Infrastructure]
@@ -109,8 +109,9 @@ Base URL: `http://localhost:8080/api/v1`
 | Method | Path | Description |
 |--------|------|-------------|
 | POST | `/auth/register` | Create account |
-| POST | `/auth/login` | Login, creates server session |
-| POST | `/auth/logout` | Invalidate session |
+| POST | `/auth/login` | Login, returns access token; sets refresh cookie |
+| POST | `/auth/refresh` | Refresh access token |
+| POST | `/auth/logout` | Clear refresh cookie |
 | GET | `/auth/me` | Current user profile |
 
 ### Time Slots
@@ -180,11 +181,10 @@ CREATE UNIQUE INDEX idx_users_email ON users (email);
 ## 6. Security
 
 - Passwords hashed with BCrypt (strength 12).
-- Server-side HTTP sessions with `JSESSIONID` cookie (httpOnly, SameSite=Lax).
-- CSRF protection via `XSRF-TOKEN` cookie + `X-XSRF-TOKEN` header on mutating requests.
+- JWT access token (15 min expiry) in `Authorization: Bearer` header.
+- Refresh token (7 days) in httpOnly cookie.
 - CORS configured for frontend origin (`http://localhost:5173`) with credentials.
-- Logout invalidates the session server-side.
-- All endpoints except `/auth/register`, `/auth/login`, `/actuator/health` require authentication.
+- All endpoints except `/auth/register`, `/auth/login`, `/auth/refresh`, `/actuator/health` require authentication.
 
 ## 7. Git Workflow
 

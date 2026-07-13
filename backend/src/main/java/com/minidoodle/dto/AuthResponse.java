@@ -1,4 +1,7 @@
 package com.minidoodle.dto;
 
-public record AuthResponse(UserResponse user) {
+public record AuthResponse(
+        String accessToken,
+        UserResponse user
+) {
 }
