@@ -1,6 +1,7 @@
 package com.minidoodle.controller;
 
 import com.minidoodle.dto.CreateSlotRequest;
+import com.minidoodle.dto.PageResponse;
 import com.minidoodle.dto.SlotResponse;
 import com.minidoodle.dto.UpdateSlotRequest;
 import com.minidoodle.dto.UpdateSlotStatusRequest;
@@ -21,7 +22,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -35,15 +35,12 @@ public class SlotController {
     }
 
     @GetMapping
-    public List<SlotResponse> listSlots(
+    public PageResponse<SlotResponse> listSlots(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to) {
-        return slotService.listSlots(SecurityUtils.currentUserId(), from, to);
-    }
-
-    @GetMapping("/{id}")
-    public SlotResponse getSlot(@PathVariable UUID id) {
-        return slotService.getSlot(SecurityUtils.currentUserId(), id);
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size) {
+        return slotService.listSlots(SecurityUtils.currentUserId(), from, to, page, size);
     }
 
     @PostMapping

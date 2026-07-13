@@ -64,9 +64,6 @@ public class AvailabilityService {
 
         List<Calendar> calendars = calendarRepository.findByUserIdIn(userIds);
 
-        Map<UUID, UUID> calendarToUser = calendars.stream()
-                .collect(Collectors.toMap(Calendar::getId, Calendar::getUserId));
-
         List<UUID> calendarIds = calendars.stream().map(Calendar::getId).toList();
 
         List<TimeSlot> slots = calendarIds.isEmpty()

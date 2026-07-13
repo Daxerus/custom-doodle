@@ -75,6 +75,14 @@ public class AuthService {
         return buildAuthResponse(user);
     }
 
+    public void validateRefreshToken(UUID userId, long tokenVersion) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ApiException("user-not-found", "User not found", HttpStatus.UNAUTHORIZED));
+        if (user.getTokenVersion() != tokenVersion) {
+            throw new ApiException("invalid-token", "Refresh token revoked", HttpStatus.UNAUTHORIZED);
+        }
+    }
+
     public UserResponse getProfile(UUID userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ApiException("user-not-found", "User not found", HttpStatus.NOT_FOUND));
@@ -99,15 +107,27 @@ public class AuthService {
         }
 
         user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        user.incrementTokenVersion();
         userRepository.save(user);
     }
 
-    public String generateRefreshToken(UUID userId, String email) {
-        return jwtService.generateRefreshToken(userId, email);
+    @Transactional
+    public void logout(UUID userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ApiException("user-not-found", "User not found", HttpStatus.NOT_FOUND));
+        user.incrementTokenVersion();
+        userRepository.save(user);
+    }
+
+    public String generateRefreshToken(UUID userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ApiException("user-not-found", "User not found", HttpStatus.UNAUTHORIZED));
+        return jwtService.generateRefreshToken(user.getId(), user.getEmail(), user.getTokenVersion());
     }
 
     private AuthResponse buildAuthResponse(User user) {
-        String accessToken = jwtService.generateAccessToken(user.getId(), user.getEmail());
+        String accessToken = jwtService.generateAccessToken(
+                user.getId(), user.getEmail(), user.getTokenVersion());
         return new AuthResponse(accessToken, UserResponse.from(user));
     }
 }

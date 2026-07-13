@@ -2,6 +2,7 @@ package com.minidoodle.controller;
 
 import com.minidoodle.dto.BookMeetingRequest;
 import com.minidoodle.dto.MeetingResponse;
+import com.minidoodle.dto.PageResponse;
 import com.minidoodle.dto.UpdateMeetingRequest;
 import com.minidoodle.security.SecurityUtils;
 import com.minidoodle.service.MeetingService;
@@ -15,9 +16,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -39,8 +40,10 @@ public class MeetingController {
     }
 
     @GetMapping("/meetings")
-    public List<MeetingResponse> listMeetings() {
-        return meetingService.listMeetings(SecurityUtils.currentUserId());
+    public PageResponse<MeetingResponse> listMeetings(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size) {
+        return meetingService.listMeetings(SecurityUtils.currentUserId(), page, size);
     }
 
     @GetMapping("/meetings/{id}")
@@ -54,8 +57,7 @@ public class MeetingController {
     }
 
     @DeleteMapping("/meetings/{id}")
-    public ResponseEntity<Void> cancelMeeting(@PathVariable UUID id) {
-        meetingService.cancelMeeting(SecurityUtils.currentUserId(), id);
-        return ResponseEntity.noContent().build();
+    public MeetingResponse cancelMeeting(@PathVariable UUID id) {
+        return meetingService.cancelMeeting(SecurityUtils.currentUserId(), id);
     }
 }
