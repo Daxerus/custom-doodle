@@ -18,7 +18,8 @@ public record MeetingResponse(
         Instant startAt,
         Instant endAt,
         List<ParticipantResponse> participants,
-        String role
+        String role,
+        List<UnavailableParticipantResponse> unavailableParticipants
 ) {
     public static MeetingResponse from(
             Meeting meeting,
@@ -26,7 +27,8 @@ public record MeetingResponse(
             Instant startAt,
             Instant endAt,
             List<ParticipantResponse> participants,
-            String role) {
+            String role,
+            List<UnavailableParticipantResponse> unavailableParticipants) {
         return new MeetingResponse(
                 meeting.getId(),
                 meeting.getTimeSlotId(),
@@ -38,6 +40,7 @@ public record MeetingResponse(
                 startAt,
                 endAt,
                 participants,
-                role);
+                role,
+                unavailableParticipants);
     }
 }

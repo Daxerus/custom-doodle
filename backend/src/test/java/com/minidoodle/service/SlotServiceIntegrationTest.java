@@ -29,7 +29,7 @@ class SlotServiceIntegrationTest {
     @Test
     void createSlot_rejectsOverlap() {
         var register = new com.minidoodle.dto.RegisterRequest("Test User", "slot-test@example.com", "password123");
-        var user = com.minidoodle.dto.UserResponse.from(authService.register(register));
+        var user = authService.register(register).user();
         Instant start = Instant.parse("2026-08-01T10:00:00Z");
 
         slotService.createSlot(user.id(), new CreateSlotRequest(start, 60, SlotStatus.FREE));
@@ -42,7 +42,7 @@ class SlotServiceIntegrationTest {
     @Test
     void createSlot_success() {
         var register = new com.minidoodle.dto.RegisterRequest("Test User 2", "slot-test2@example.com", "password123");
-        var user = com.minidoodle.dto.UserResponse.from(authService.register(register));
+        var user = authService.register(register).user();
         Instant start = Instant.parse("2026-09-01T10:00:00Z");
 
         var slot = slotService.createSlot(user.id(), new CreateSlotRequest(start, 30, SlotStatus.FREE));

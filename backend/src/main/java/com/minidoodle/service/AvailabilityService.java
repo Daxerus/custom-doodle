@@ -33,16 +33,19 @@ public class AvailabilityService {
     private final CalendarRepository calendarRepository;
     private final TimeSlotRepository timeSlotRepository;
     private final MeetingRepository meetingRepository;
+    private final ParticipantAvailabilityService participantAvailabilityService;
 
     public AvailabilityService(
             UserRepository userRepository,
             CalendarRepository calendarRepository,
             TimeSlotRepository timeSlotRepository,
-            MeetingRepository meetingRepository) {
+            MeetingRepository meetingRepository,
+            ParticipantAvailabilityService participantAvailabilityService) {
         this.userRepository = userRepository;
         this.calendarRepository = calendarRepository;
         this.timeSlotRepository = timeSlotRepository;
         this.meetingRepository = meetingRepository;
+        this.participantAvailabilityService = participantAvailabilityService;
     }
 
     public AvailabilityResponse getAvailability(List<UUID> userIds, Instant from, Instant to) {
@@ -107,7 +110,8 @@ public class AvailabilityService {
                     user.getId(),
                     user.getDisplayName(),
                     user.getEmail(),
-                    busyIntervals));
+                    busyIntervals,
+                    participantAvailabilityService.hasFreeSlotInRange(userId, from, to)));
         }
 
         return new AvailabilityResponse(from, to, userAvailabilities);

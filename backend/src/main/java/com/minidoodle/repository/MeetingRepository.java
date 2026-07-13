@@ -2,6 +2,7 @@ package com.minidoodle.repository;
 
 import com.minidoodle.domain.Meeting;
 import com.minidoodle.domain.MeetingStatus;
+import com.minidoodle.domain.ParticipantInvitationStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -19,7 +20,11 @@ public interface MeetingRepository extends JpaRepository<Meeting, UUID> {
     @Query("""
             SELECT m FROM Meeting m
             WHERE m.organizerId = :userId
-               OR m.id IN (SELECT mp.meetingId FROM MeetingParticipant mp WHERE mp.userId = :userId)
+               OR m.id IN (
+                    SELECT mp.meetingId FROM MeetingParticipant mp
+                    WHERE mp.userId = :userId
+                      AND mp.invitationStatus = com.minidoodle.domain.ParticipantInvitationStatus.INVITED
+               )
             ORDER BY m.createdAt DESC
             """)
     List<Meeting> findAllForUser(@Param("userId") UUID userId);

@@ -2,6 +2,8 @@ package com.minidoodle.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
@@ -23,14 +25,23 @@ public class MeetingParticipant {
     @Column(nullable = false)
     private String email;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "invitation_status", nullable = false)
+    private ParticipantInvitationStatus invitationStatus;
+
     protected MeetingParticipant() {
     }
 
-    public MeetingParticipant(UUID meetingId, UUID userId, String email) {
+    public MeetingParticipant(
+            UUID meetingId,
+            UUID userId,
+            String email,
+            ParticipantInvitationStatus invitationStatus) {
         this.id = UUID.randomUUID();
         this.meetingId = meetingId;
         this.userId = userId;
         this.email = email;
+        this.invitationStatus = invitationStatus;
     }
 
     public UUID getId() {
@@ -47,5 +58,9 @@ public class MeetingParticipant {
 
     public String getEmail() {
         return email;
+    }
+
+    public ParticipantInvitationStatus getInvitationStatus() {
+        return invitationStatus;
     }
 }
