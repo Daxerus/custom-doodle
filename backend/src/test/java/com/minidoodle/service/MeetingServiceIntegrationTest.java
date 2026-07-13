@@ -46,7 +46,10 @@ class MeetingServiceIntegrationTest {
 
         var firstMeeting = meetingService.bookMeeting(
                 user.id(), slot.id(), new BookMeetingRequest("First", "Initial booking", List.of()));
-        meetingService.cancelMeeting(user.id(), firstMeeting.id());
+        var cancelled = meetingService.cancelMeeting(user.id(), firstMeeting.id());
+        assertThat(cancelled.status()).isEqualTo(MeetingStatus.CANCELLED);
+        assertThat(cancelled.id()).isEqualTo(firstMeeting.id());
+        assertThat(cancelled.title()).isEqualTo("First");
 
         var slotAfterCancel = slotService.getSlot(user.id(), slot.id());
         assertThat(slotAfterCancel.status()).isEqualTo(SlotStatus.FREE);
@@ -93,7 +96,7 @@ class MeetingServiceIntegrationTest {
         assertThat(meeting.unavailableParticipants().getFirst().email()).isEqualTo("bob-unavail@example.com");
         assertThat(meeting.unavailableParticipants().getFirst().userId()).isEqualTo(bob.id());
         assertThat(meeting.participants().getFirst().invitationStatus()).isEqualTo(ParticipantInvitationStatus.INVITED_BUSY);
-        assertThat(meetingService.listMeetings(bob.id())).isEmpty();
+        assertThat(meetingService.listMeetings(bob.id(), 0, 50).content()).hasSize(1);
     }
 
     @Test
@@ -114,6 +117,6 @@ class MeetingServiceIntegrationTest {
 
         assertThat(meeting.unavailableParticipants()).isEmpty();
         assertThat(meeting.participants().getFirst().invitationStatus()).isEqualTo(ParticipantInvitationStatus.INVITED);
-        assertThat(meetingService.listMeetings(bob.id())).hasSize(1);
+        assertThat(meetingService.listMeetings(bob.id(), 0, 50).content()).hasSize(1);
     }
 }
